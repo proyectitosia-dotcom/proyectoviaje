@@ -38,7 +38,7 @@ export default function ExpensesScreen({ trip, update }) {
   const group = { members: [], expenses: [], ...(trip.group || {}) };
   const members = group.members;
   const [form, setForm] = useState({ category: 'vuelo', concept: '', amount: '', date: '' });
-  const [share, setShare] = useState({ on: false, paidBy: null, participants: [] });
+  const [gform, setGform] = useState({ category: 'comida', concept: '', amount: '', date: '', paidBy: null, participants: [] });
   const [sharing, setSharing] = useState(null); // { id, paidBy, participants } al compartir un gasto existente
   const [filter, setFilter] = useState(null);
   const nameOf = (id) => members.find((m) => m.id === id)?.name || '?';
@@ -55,16 +55,20 @@ export default function ExpensesScreen({ trip, update }) {
     if (!(amount > 0)) return notify('Importe no válido', 'Introduce un importe mayor que 0.');
     const date = form.date.trim();
     if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T12:00:00`)))) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
-    const wantsShare = share.on && members.length > 1;
-    if (wantsShare && !members.some((m) => m.id === share.paidBy)) return notify('Elige quién ha pagado', 'Para compartir el gasto con el grupo indica quién lo pagó.');
-    const exp = { ...form, concept: form.concept.trim(), date, amount, id: uid() };
-    if (wantsShare) {
-      const gid = uid();
-      exp.groupId = gid;
-      update({ expenses: [...expenses, exp], group: { ...group, expenses: [...group.expenses, groupExpense(exp, gid, share)] } });
-    } else update({ expenses: [...expenses, exp] });
+    update({ expenses: [...expenses, { ...form, concept: form.concept.trim(), date, amount, id: uid() }] });
     setForm({ ...form, concept: '', amount: '' });
-    setShare({ ...share, on: false, participants: [] });
+  };
+  // Gasto en grupo: se guarda en Gastos y en Grupo, vinculados entre sí
+  const addGroup = () => {
+    const amount = Math.round(num(gform.amount) * 100) / 100;
+    if (!(amount > 0)) return notify('Importe no válido', 'Introduce un importe mayor que 0.');
+    const date = gform.date.trim();
+    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T12:00:00`)))) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
+    if (!members.some((m) => m.id === gform.paidBy)) return notify('Elige quién ha pagado');
+    const gid = uid();
+    const exp = { id: uid(), category: gform.category, concept: gform.concept.trim(), amount, date, groupId: gid };
+    update({ expenses: [...expenses, exp], group: { ...group, expenses: [...group.expenses, groupExpense(exp, gid, gform)] } });
+    setGform({ ...gform, concept: '', amount: '', participants: [] });
   };
   const confirmShare = (e) => {
     if (!members.some((m) => m.id === sharing.paidBy)) return notify('Elige quién ha pagado');
@@ -82,6 +86,9 @@ export default function ExpensesScreen({ trip, update }) {
     if (old && linkOf(old)) patch.group = { ...group, expenses: group.expenses.map((g) => (g.id === old.groupId ? { ...g, amount, expenseId: next.id } : g)) };
     update(patch);
   };
+  const catLabel = (label) => label.replace(/^Costes? (de )?/, '').replace(/^./, (c) => c.toUpperCase());
+  const sharedExpenses = expenses.filter((e) => linkOf(e));
+  const sharedTotal = sharedExpenses.reduce((a, e) => a + num(e.amount), 0);
   const catKey = (e) => (CATEGORIES.some(([k]) => k === e.category) ? e.category : 'otros');
   const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, expenses.filter((e) => catKey(e) === k).reduce((a, e) => a + num(e.amount), 0)]));
   const total = Object.values(byCat).reduce((a, b) => a + b, 0);
@@ -114,24 +121,51 @@ export default function ExpensesScreen({ trip, update }) {
       <Card>
         <H>Añadir gasto</H>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {CATEGORIES.map(([k, label, icon]) => <Chip key={k} title={`${icon} ${label.replace(/^Costes? (de )?/, '').replace(/^./, (c) => c.toUpperCase())}`} active={form.category === k} onPress={() => setForm({ ...form, category: k })} />)}
+          {CATEGORIES.map(([k, label, icon]) => <Chip key={k} title={`${icon} ${catLabel(label)}`} active={form.category === k} onPress={() => setForm({ ...form, category: k })} />)}
         </View>
         <Field label="Concepto" value={form.concept} onChangeText={(v) => setForm({ ...form, concept: v })} placeholder="Ej. Entradas Coliseo" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <View style={{ flex: 1 }}><Field label="Importe (€)" value={form.amount} onChangeText={(v) => setForm({ ...form, amount: v })} keyboardType="decimal-pad" /></View>
           <View style={{ flex: 1 }}><DateField label="Fecha" value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></View>
         </View>
-        <Label>Gasto en grupo</Label>
+        <Btn title="Añadir" onPress={add} />
+      </Card>
+
+      <Card>
+        <H>Gastos en grupo</H>
         {members.length > 1 ? (
           <View>
+            <Muted>Se guardan en Gastos y también en la pestaña Grupo (saldos y cuentas), quedando vinculados.</Muted>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-              <Chip title="👥 Compartir con el grupo" active={share.on} onPress={() => setShare({ ...share, on: !share.on })} />
+              {CATEGORIES.map(([k, label, icon]) => <Chip key={k} title={`${icon} ${catLabel(label)}`} active={gform.category === k} onPress={() => setGform({ ...gform, category: k })} />)}
             </View>
-            {share.on && <SharePicker members={members} value={share} onChange={(v) => setShare({ ...share, ...v })} />}
-            {share.on && <Muted>Se añadirá también en la pestaña Grupo y quedarán vinculados.</Muted>}
+            <Field label="Concepto" value={gform.concept} onChangeText={(v) => setGform({ ...gform, concept: v })} placeholder="Ej. Cena" />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flex: 1 }}><Field label="Importe (€)" value={gform.amount} onChangeText={(v) => setGform({ ...gform, amount: v })} keyboardType="decimal-pad" /></View>
+              <View style={{ flex: 1 }}><DateField label="Fecha" value={gform.date} onChange={(v) => setGform({ ...gform, date: v })} /></View>
+            </View>
+            <SharePicker members={members} value={gform} onChange={(v) => setGform({ ...gform, ...v })} />
+            <Btn title="Añadir gasto en grupo" onPress={addGroup} />
           </View>
-        ) : <Muted>Añade al menos 2 participantes en la pestaña Grupo para poder compartir gastos.</Muted>}
-        <Btn title="Añadir" onPress={add} />
+        ) : <Muted>Añade al menos 2 participantes en la pestaña Grupo para poder registrar gastos en grupo.</Muted>}
+        {sharedExpenses.length > 0 && (
+          <View style={{ marginTop: 10 }}>
+            <Row label="Total en grupo" value={money(sharedTotal)} />
+            {sharedExpenses.map((e) => {
+              const link = linkOf(e);
+              return (
+                <View key={e.id} style={{ paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{fmtDMY(e.date)}</Text></Text>
+                    <Text style={{ fontWeight: '700' }}>{money(e.amount)}</Text>
+                    <Text style={{ color: colors.danger, paddingLeft: 12 }} onPress={() => remove(e)}>✕</Text>
+                  </View>
+                  <Muted>Pagó {nameOf(link.paidBy)} · para {(link.participants || []).map(nameOf).join(', ')}</Muted>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </Card>
 
       <Card>
