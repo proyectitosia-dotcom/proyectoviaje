@@ -159,8 +159,19 @@ export default function ExpensesScreen({ trip, update }) {
   const catKey = (e) => (CATEGORIES.some(([k]) => k === e.category) ? e.category : 'otros');
   // Total y resumen INDIVIDUALES: solo los gastos personales que he añadido yo (los gastos en grupo se ven entre todos en la pestaña Grupo)
   const mine = expenses.filter((e) => e.by === me.id && !linkOf(e));
-  const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, mine.filter((e) => catKey(e) === k).reduce((a, e) => a + num(e.amount), 0)]));
-  const total = r2(Object.values(byCat).reduce((a, b) => a + b, 0));
+  // Mi persona dentro del grupo (se vincula sola al entrar en el viaje)
+  const myMemberId = members.find((m) => m.userId === me.id)?.id;
+  // Gastos en grupo que he pagado yo: se suman enteros a mi total (categoría del gasto vinculado, o "otros")
+  const fronted = myMemberId ? group.expenses.filter((g) => !g.settlement && g.paidBy === myMemberId) : [];
+  const frontedCat = (g) => { const linked = expenses.find((x) => x.groupId === g.id); return linked ? catKey(linked) : 'otros'; };
+  // Pagos de deudas que me han hecho a mí: se van restando de mi total
+  const received = myMemberId ? group.expenses.filter((g) => g.settlement && (g.participants || []).includes(myMemberId)) : [];
+  const personalTotal = mine.reduce((a, e) => a + num(e.amount), 0);
+  const frontedTotal = fronted.reduce((a, g) => a + num(g.amount), 0);
+  const receivedTotal = received.reduce((a, g) => a + num(g.amount), 0);
+  const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, mine.filter((e) => catKey(e) === k).reduce((a, e) => a + num(e.amount), 0) + fronted.filter((g) => frontedCat(g) === k).reduce((a, g) => a + num(g.amount), 0)]));
+  const gross = r2(personalTotal + frontedTotal); // base de los porcentajes
+  const total = r2(gross - receivedTotal);
   const routesCost = (trip.routes || []).reduce((a, r) => a + num(r.cost), 0);
   const hotelsCost = (trip.hotels || []).reduce((a, h) => {
     const diff = h.checkIn && h.checkOut ? Math.round((new Date(`${h.checkOut}T12:00:00`) - new Date(`${h.checkIn}T12:00:00`)) / 864e5) : 0;
@@ -173,20 +184,25 @@ export default function ExpensesScreen({ trip, update }) {
       <Card>
         <H>💰 Mi total gastado</H>
         <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, marginBottom: 6 }}>{money(total)}</Text>
-        <Muted>Solo cuenta los gastos que has añadido tú. Los gastos en grupo se ven entre todos en la pestaña Grupo.</Muted>
+        <Row label="Mis gastos propios" value={money(personalTotal)} />
+        <Row label="👥 Pagados por mí en grupo" value={`+ ${money(frontedTotal)}`} />
+        <Row label="💸 Me han devuelto" value={`− ${money(receivedTotal)}`} />
+        <Muted style={{ marginTop: 4 }}>Si pagas un gasto en grupo, se suma entero a tu total; cuando los demás te van pagando su parte, se resta. Los gastos en grupo se ven entre todos en la pestaña Grupo.</Muted>
       </Card>
 
       <Card>
         <H>Mi resumen de gastos</H>
         {CATEGORIES.map(([k, label, icon]) => (
           <View key={k}>
-            <Row label={`${icon} ${label}${total > 0 ? ` (${Math.round((byCat[k] / total) * 100)}%)` : ''}`} value={money(byCat[k])} />
+            <Row label={`${icon} ${label}${gross > 0 ? ` (${Math.round((byCat[k] / gross) * 100)}%)` : ''}`} value={money(byCat[k])} />
             <View style={{ height: 6, backgroundColor: colors.bg, borderRadius: 3, marginBottom: 4 }}>
-              <View style={{ height: 6, width: `${total > 0 ? Math.min(100, Math.max(0, (byCat[k] / total) * 100)) : 0}%`, backgroundColor: colors.primary, borderRadius: 3 }} />
+              <View style={{ height: 6, width: `${gross > 0 ? Math.min(100, Math.max(0, (byCat[k] / gross) * 100)) : 0}%`, backgroundColor: colors.primary, borderRadius: 3 }} />
             </View>
           </View>
         ))}
         <View style={{ borderTopWidth: 1, borderColor: colors.border, marginTop: 6, paddingTop: 6 }}>
+          <Row label="Suma de gastos" value={money(gross)} />
+          {receivedTotal > 0 && <Row label="💸 Me han devuelto" value={`− ${money(receivedTotal)}`} />}
           <Row label="Total" value={money(total)} />
         </View>
         <Muted style={{ marginTop: 6 }}>Referencia: rutas registradas {money(routesCost)} · hoteles {money(hotelsCost)}</Muted>
