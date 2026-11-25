@@ -155,7 +155,10 @@ export default function ExpensesScreen({ trip, update }) {
   const sharedTotal = sharedExpenses.reduce((a, e) => a + num(e.amount), 0);
   const catKey = (e) => (CATEGORIES.some(([k]) => k === e.category) ? e.category : 'otros');
   const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, expenses.filter((e) => catKey(e) === k).reduce((a, e) => a + num(e.amount), 0)]));
-  const total = Object.values(byCat).reduce((a, b) => a + b, 0);
+  const total = Object.values(byCat).reduce((a, b) => a + b, 0); // suma por categorías (base de los porcentajes)
+  // Deudas pagadas con el botón Pagar de Grupo (group.expenses con settlement:true): se restan del total general
+  const settledTotal = group.expenses.filter((e) => e.settlement).reduce((a, e) => a + num(e.amount), 0);
+  const netTotal = r2(total - settledTotal);
   const routesCost = (trip.routes || []).reduce((a, r) => a + num(r.cost), 0);
   const hotelsCost = (trip.hotels || []).reduce((a, h) => {
     const diff = h.checkIn && h.checkOut ? Math.round((new Date(`${h.checkOut}T12:00:00`) - new Date(`${h.checkIn}T12:00:00`)) / 864e5) : 0;
@@ -176,7 +179,8 @@ export default function ExpensesScreen({ trip, update }) {
           </View>
         ))}
         <View style={{ borderTopWidth: 1, borderColor: colors.border, marginTop: 6, paddingTop: 6 }}>
-          <Row label="TOTAL" value={money(total)} />
+          {settledTotal > 0 && <Row label="💸 Deudas pagadas en el grupo" value={`− ${money(settledTotal)}`} />}
+          <Row label="TOTAL" value={money(netTotal)} />
         </View>
         <Muted style={{ marginTop: 6 }}>Referencia: rutas registradas {money(routesCost)} · hoteles {money(hotelsCost)}</Muted>
         {routesCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromRoutes) ? 'Actualizar' : 'Importar'} coste de rutas en Transporte`} onPress={() => importCost('fromRoutes', 'transporte', 'Rutas del viaje', routesCost)} />}
