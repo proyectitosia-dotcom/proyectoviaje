@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, View, Text } from 'react-native';
-import { Card, H, Field, Btn, Chip, Row, Muted, colors, confirm } from '../components/ui';
+import { Card, H, Field, Btn, Chip, Row, Muted, colors, confirm, notify } from '../components/ui';
 import { uid } from '../store';
 import { money, num } from '../utils';
 
@@ -18,16 +18,21 @@ export default function ExpensesScreen({ trip, update }) {
   const [filter, setFilter] = useState(null);
 
   const add = () => {
-    if (!num(form.amount)) return;
-    update({ expenses: [...expenses, { ...form, amount: num(form.amount), id: uid() }] });
+    const amount = Math.round(num(form.amount) * 100) / 100;
+    if (!(amount > 0)) return notify('Importe no válido', 'Introduce un importe mayor que 0.');
+    const date = form.date.trim();
+    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T12:00:00`)))) return notify('Fecha no válida', 'Usa el formato AAAA-MM-DD.');
+    update({ expenses: [...expenses, { ...form, concept: form.concept.trim(), date, amount, id: uid() }] });
     setForm({ ...form, concept: '', amount: '' });
   };
-  const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, expenses.filter((e) => e.category === k).reduce((a, e) => a + num(e.amount), 0)]));
+  const catKey = (e) => (CATEGORIES.some(([k]) => k === e.category) ? e.category : 'otros');
+  const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, expenses.filter((e) => catKey(e) === k).reduce((a, e) => a + num(e.amount), 0)]));
   const total = Object.values(byCat).reduce((a, b) => a + b, 0);
   const routesCost = (trip.routes || []).reduce((a, r) => a + num(r.cost), 0);
   const hotelsCost = (trip.hotels || []).reduce((a, h) => {
-    const n = h.checkIn && h.checkOut ? Math.max(0, Math.round((new Date(h.checkOut) - new Date(h.checkIn)) / 864e5)) : 0;
-    return a + num(h.pricePerNight) * (h.rooms || 1) * n;
+    const diff = h.checkIn && h.checkOut ? Math.round((new Date(`${h.checkOut}T12:00:00`) - new Date(`${h.checkIn}T12:00:00`)) / 864e5) : 0;
+    const n = Number.isFinite(diff) ? Math.max(0, diff) : 0;
+    return a + num(h.pricePerNight) * Math.max(1, num(h.rooms)) * n;
   }, 0);
 
   return (
@@ -36,9 +41,9 @@ export default function ExpensesScreen({ trip, update }) {
         <H>Resumen de gastos</H>
         {CATEGORIES.map(([k, label, icon]) => (
           <View key={k}>
-            <Row label={`${icon} ${label}`} value={money(byCat[k])} />
+            <Row label={`${icon} ${label}${total > 0 ? ` (${Math.round((byCat[k] / total) * 100)}%)` : ''}`} value={money(byCat[k])} />
             <View style={{ height: 6, backgroundColor: colors.bg, borderRadius: 3, marginBottom: 4 }}>
-              <View style={{ height: 6, width: `${total ? (byCat[k] / total) * 100 : 0}%`, backgroundColor: colors.primary, borderRadius: 3 }} />
+              <View style={{ height: 6, width: `${total > 0 ? Math.min(100, Math.max(0, (byCat[k] / total) * 100)) : 0}%`, backgroundColor: colors.primary, borderRadius: 3 }} />
             </View>
           </View>
         ))}
@@ -46,8 +51,8 @@ export default function ExpensesScreen({ trip, update }) {
           <Row label="TOTAL" value={money(total)} />
         </View>
         <Muted style={{ marginTop: 6 }}>Referencia: rutas registradas {money(routesCost)} · hoteles {money(hotelsCost)}</Muted>
-        {routesCost > 0 && <Btn small kind="outline" title="Importar coste de rutas a Transporte" onPress={() => update({ expenses: [...expenses.filter((e) => !e.fromRoutes), { id: uid(), category: 'transporte', concept: 'Rutas del viaje', amount: routesCost, fromRoutes: true }] })} />}
-        {hotelsCost > 0 && <Btn small kind="outline" title="Importar coste de hoteles a Otros" onPress={() => update({ expenses: [...expenses.filter((e) => !e.fromHotels), { id: uid(), category: 'otros', concept: 'Alojamiento', amount: hotelsCost, fromHotels: true }] })} />}
+        {routesCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromRoutes) ? 'Actualizar' : 'Importar'} coste de rutas en Transporte`} onPress={() => update({ expenses: [...expenses.filter((e) => !e.fromRoutes), { id: uid(), category: 'transporte', concept: 'Rutas del viaje', amount: routesCost, fromRoutes: true }] })} />}
+        {hotelsCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromHotels) ? 'Actualizar' : 'Importar'} coste de hoteles en Otros`} onPress={() => update({ expenses: [...expenses.filter((e) => !e.fromHotels), { id: uid(), category: 'otros', concept: 'Alojamiento', amount: hotelsCost, fromHotels: true }] })} />}
       </Card>
 
       <Card>
@@ -69,9 +74,9 @@ export default function ExpensesScreen({ trip, update }) {
           <Chip title="Todos" active={!filter} onPress={() => setFilter(null)} />
           {CATEGORIES.map(([k, , icon]) => <Chip key={k} title={icon} active={filter === k} onPress={() => setFilter(k)} />)}
         </View>
-        {expenses.filter((e) => !filter || e.category === filter).map((e) => (
+        {expenses.filter((e) => !filter || catKey(e) === filter).map((e) => (
           <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
-            <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === e.category)?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{e.date}</Text></Text>
+            <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{e.date}</Text></Text>
             <Text style={{ fontWeight: '700' }}>{money(e.amount)}</Text>
             <Text style={{ color: colors.danger, paddingLeft: 12 }} onPress={() => confirm('¿Eliminar gasto?', () => update({ expenses: expenses.filter((x) => x.id !== e.id) }))}>✕</Text>
           </View>

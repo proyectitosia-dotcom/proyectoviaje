@@ -12,20 +12,29 @@ export default function GroupScreen({ trip, update }) {
   const save = (patch) => update({ group: { ...group, ...patch } });
   const nameOf = (id) => members.find((m) => m.id === id)?.name || '?';
 
+  const r2 = (x) => { const v = Math.round((Number(x) || 0) * 100) / 100; return v === 0 ? 0 : v; };
   const addMember = () => {
-    if (!name.trim()) return;
-    save({ members: [...members, { id: uid(), name: name.trim() }] });
+    const n = name.trim().replace(/\s+/g, ' ');
+    if (!n) return;
+    if (members.some((m) => m.name.trim().toLowerCase() === n.toLowerCase())) return notify(`Ya existe un participante llamado "${n}"`);
+    save({ members: [...members, { id: uid(), name: n }] });
     setName('');
   };
   const removeMember = (m) => {
-    if (expenses.some((e) => e.paidBy === m.id || e.participants.includes(m.id))) return confirm(`${m.name} tiene gastos asociados. Elimina esos gastos primero.`, () => {});
-    save({ members: members.filter((x) => x.id !== m.id) });
+    if (expenses.some((e) => e.paidBy === m.id || (e.participants || []).includes(m.id))) return notify(`${m.name} tiene gastos asociados. Elimina esos gastos primero.`);
+    confirm(`¿Eliminar a ${m.name}?`, () => {
+      save({ members: members.filter((x) => x.id !== m.id) });
+      setForm((f) => ({ ...f, paidBy: f.paidBy === m.id ? null : f.paidBy, participants: f.participants.filter((x) => x !== m.id) }));
+    });
   };
   const addExpense = () => {
-    const participants = form.participants.length ? form.participants : members.map((m) => m.id);
-    if (!num(form.amount)) return notify('Indica el importe');
-    if (!form.paidBy) return notify('Elige quién ha pagado');
-    save({ expenses: [...expenses, { ...form, participants, amount: num(form.amount), id: uid() }] });
+    const ids = members.map((m) => m.id);
+    const chosen = form.participants.filter((x) => ids.includes(x));
+    const participants = chosen.length ? chosen : ids;
+    const amount = r2(num(form.amount));
+    if (!(amount > 0)) return notify('Indica un importe mayor que 0');
+    if (!form.paidBy || !ids.includes(form.paidBy)) return notify('Elige quién ha pagado');
+    save({ expenses: [...expenses, { ...form, concept: form.concept.trim(), participants, amount, id: uid() }] });
     setForm({ concept: '', amount: '', paidBy: form.paidBy, participants: [] });
   };
   const { balances, transfers } = settleUp(members, expenses);
@@ -70,12 +79,12 @@ export default function GroupScreen({ trip, update }) {
         {members.map((m) => (
           <View key={m.id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
             <Text>{m.name}</Text>
-            <Text style={{ fontWeight: '700', color: balances[m.id] >= 0 ? colors.ok : colors.danger }}>{balances[m.id] >= 0 ? '+' : ''}{money(balances[m.id])}</Text>
+            <Text style={{ fontWeight: '700', color: r2(balances[m.id]) >= 0 ? colors.ok : colors.danger }}>{r2(balances[m.id]) >= 0 ? '+' : ''}{money(r2(balances[m.id]))}</Text>
           </View>
         ))}
         <Text style={{ fontWeight: '700', marginTop: 10 }}>Cómo cuadrar las cuentas</Text>
         {transfers.length ? transfers.map((t, i) => (
-          <Text key={i} style={{ paddingVertical: 3 }}>💸 <Text style={{ fontWeight: '700' }}>{nameOf(t.from)}</Text> paga {money(t.amount)} a <Text style={{ fontWeight: '700' }}>{nameOf(t.to)}</Text></Text>
+          <Text key={i} style={{ paddingVertical: 3 }}>💸 <Text style={{ fontWeight: '700' }}>{nameOf(t.from)}</Text> paga {money(r2(t.amount))} a <Text style={{ fontWeight: '700' }}>{nameOf(t.to)}</Text></Text>
         )) : <Muted>Todo cuadrado ✅</Muted>}
       </Card>
 
@@ -85,7 +94,7 @@ export default function GroupScreen({ trip, update }) {
           <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
             <View style={{ flex: 1 }}>
               <Text>{e.concept || 'Gasto'} · {money(e.amount)}</Text>
-              <Muted>Pagó {nameOf(e.paidBy)} · para {e.participants.map(nameOf).join(', ')}</Muted>
+              <Muted>Pagó {nameOf(e.paidBy)} · para {(e.participants || []).map(nameOf).join(', ')}</Muted>
             </View>
             <Text style={{ color: colors.danger, padding: 6 }} onPress={() => confirm('¿Eliminar gasto?', () => save({ expenses: expenses.filter((x) => x.id !== e.id) }))}>✕</Text>
           </View>
