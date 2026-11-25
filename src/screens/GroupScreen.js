@@ -34,7 +34,10 @@ export default function GroupScreen({ trip, update }) {
     save({ expenses: [...expenses, { id: uid(), settlement: true, concept: 'Pago de deuda', amount, paidBy: t.from, participants: [t.to], date: todayISO() }] });
   };
   const { balances, transfers } = settleUp(members, expenses);
-  const total = expenses.reduce((a, e) => a + num(e.amount), 0);
+  // Total gastado del grupo: suma de los gastos en grupo y se le restan las deudas que se van pagando
+  const spent = r2(expenses.filter((e) => !e.settlement).reduce((a, e) => a + num(e.amount), 0));
+  const paid = r2(expenses.filter((e) => e.settlement).reduce((a, e) => a + num(e.amount), 0));
+  const total = r2(spent - paid);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 14 }}>
@@ -51,7 +54,9 @@ export default function GroupScreen({ trip, update }) {
 
       <Card>
         <H>Saldos</H>
-        <Muted>Total gastado por el grupo: {money(total)}</Muted>
+        <Text style={{ fontSize: 26, fontWeight: '800', color: colors.primary }}>{money(total)}</Text>
+        <Muted>Total gastado por el grupo</Muted>
+        <Muted>Gastos en grupo: {money(spent)} · Deudas pagadas: − {money(paid)}</Muted>
         {members.map((m) => (
           <View key={m.id} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
             <Text>{m.name}</Text>
