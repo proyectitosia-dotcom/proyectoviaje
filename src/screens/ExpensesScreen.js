@@ -59,7 +59,7 @@ export default function ExpensesScreen({ trip, update }) {
       <Card>
         <H>Añadir gasto</H>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {CATEGORIES.map(([k, label, icon]) => <Chip key={k} title={`${icon} ${label.replace(/^Costes? (de )?/, '')}`} active={form.category === k} onPress={() => setForm({ ...form, category: k })} />)}
+          {CATEGORIES.map(([k, label, icon]) => <Chip key={k} title={`${icon} ${label.replace(/^Costes? (de )?/, '').replace(/^./, (c) => c.toUpperCase())}`} active={form.category === k} onPress={() => setForm({ ...form, category: k })} />)}
         </View>
         <Field label="Concepto" value={form.concept} onChangeText={(v) => setForm({ ...form, concept: v })} placeholder="Ej. Entradas Coliseo" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
