@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Card, H, Field, Btn, Muted, Text, DateField, useStyles, confirm, notify } from './src/components/ui';
 import { ThemeProvider, useTheme } from './src/theme';
+import { UserProvider, useMe } from './src/user';
 import { createTrip, tripExists, subscribeTrip, updateTrip, getMyTrips, addMyTrip, removeMyTrip, isShared } from './src/store';
 import RoutesScreen from './src/screens/RoutesScreen';
 import HotelsScreen from './src/screens/HotelsScreen';
@@ -36,7 +37,24 @@ async function shareTrip(name, code) {
   Share.share({ message });
 }
 
+function NamePrompt() {
+  const { setName } = useMe();
+  const [v, setV] = useState('');
+  return (
+    <View style={{ padding: 16, paddingTop: 60 }}>
+      <Card>
+        <H>👋 ¿Cómo te llamas?</H>
+        <Muted>Tu nombre aparecerá en los gastos que añadas y así los demás sabrán quién los ha puesto. Podrás cambiarlo cuando quieras.</Muted>
+        <Field value={v} onChangeText={setV} placeholder="Tu nombre" onSubmitEditing={() => v.trim() && setName(v)} />
+        <Btn title="Continuar" onPress={() => (v.trim() ? setName(v) : notify('Escribe tu nombre'))} />
+      </Card>
+    </View>
+  );
+}
+
 function Home({ onOpen }) {
+  const { me, setName: setMyName } = useMe();
+  const [myName, setMyNameDraft] = useState(me.name);
   const { colors } = useTheme();
   const st = useStyles(makeStyles);
   const [trips, setTrips] = useState([]);
@@ -80,6 +98,13 @@ function Home({ onOpen }) {
           ))}
         </Card>
       )}
+      <Card>
+        <H>👤 Mi nombre</H>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <View style={{ flex: 1 }}><Field value={myName} onChangeText={setMyNameDraft} placeholder="Tu nombre" /></View>
+          <Btn small title="Guardar" onPress={() => (myName.trim() ? (setMyName(myName), notify('Nombre guardado')) : notify('Escribe tu nombre'))} />
+        </View>
+      </Card>
       <Card>
         <H>Nuevo viaje</H>
         <Field label="Nombre" value={name} onChangeText={setName} placeholder="Verano en Italia" />
@@ -134,12 +159,13 @@ function Trip({ code, onExit }) {
 function Root() {
   const { colors, mode } = useTheme();
   const [code, setCode] = useState(null);
+  const { me, ready } = useMe();
   return (
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.card }} edges={['top', 'bottom']}>
         <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
-          {code ? <Trip code={code} onExit={() => setCode(null)} /> : <Home onOpen={setCode} />}
+          {!ready ? null : !me.name ? <NamePrompt /> : code ? <Trip code={code} onExit={() => setCode(null)} /> : <Home onOpen={setCode} />}
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -147,7 +173,7 @@ function Root() {
 }
 
 export default function App() {
-  return <ThemeProvider><Root /></ThemeProvider>;
+  return <ThemeProvider><UserProvider><Root /></UserProvider></ThemeProvider>;
 }
 
 const makeStyles = (colors) => ({

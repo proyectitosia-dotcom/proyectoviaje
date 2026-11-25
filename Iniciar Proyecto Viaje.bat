@@ -51,6 +51,12 @@ if "%UPDATED%"=="0" if not exist ".git" (
   echo.
 )
 
+rem ---- Version instalada ----
+if exist ".git" (
+  where git >nul 2>nul
+  if not errorlevel 1 for /f "delims=" %%V in ('git log -1 --format^=%%h' ) do echo Version: %%V
+)
+
 rem ---- 2. Instalar dependencias ----
 if not exist "node_modules\expo" (
   echo Instalando dependencias. La primera vez tarda unos minutos...

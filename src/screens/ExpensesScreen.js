@@ -3,6 +3,7 @@ import { ScrollView, View, TouchableOpacity } from 'react-native';
 import { Card, H, Field, Btn, Chip, Row, Label, Muted, confirm, notify , Text, DateField, useTheme } from '../components/ui';
 import { uid } from '../store';
 import { money, num, fmtDMY } from '../utils';
+import { useMe } from '../user';
 
 export const CATEGORIES = [
   ['vuelo', 'Coste vuelo', '✈️'],
@@ -74,6 +75,7 @@ function SharePicker({ members, value, onChange }) {
 
 export default function ExpensesScreen({ trip, update }) {
   const { colors } = useTheme();
+  const { me } = useMe();
   const expenses = trip.expenses || [];
   const group = { members: [], expenses: [], ...(trip.group || {}) };
   const members = group.members;
@@ -105,6 +107,7 @@ export default function ExpensesScreen({ trip, update }) {
   };
   const [sharing, setSharing] = useState(null); // { id, paidBy, participants } al compartir un gasto existente
   const [filter, setFilter] = useState(null);
+  const [onlyMine, setOnlyMine] = useState(false);
   const nameOf = (id) => members.find((m) => m.id === id)?.name || '?';
   // Gasto de grupo vinculado a un gasto del viaje (si el gasto de grupo se borra desde Grupo, deja de estar vinculado)
   const linkOf = (e) => (e.groupId ? group.expenses.find((g) => g.id === e.groupId) : null);
@@ -119,7 +122,7 @@ export default function ExpensesScreen({ trip, update }) {
     if (!(amount > 0)) return notify('Importe no válido', 'Introduce un importe mayor que 0.');
     const date = form.date.trim();
     if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T12:00:00`)))) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
-    update({ expenses: [...expenses, { category: form.category, concept: form.concept.trim(), date, amount, id: uid(), ...(orig ? { orig } : {}) }] });
+    update({ expenses: [...expenses, { category: form.category, concept: form.concept.trim(), date, amount, id: uid(), by: me.id, byName: me.name, ...(orig ? { orig } : {}) }] });
     setForm({ ...form, concept: '', amount: '' });
   };
   // Gasto en grupo: se guarda en Gastos y en Grupo, vinculados entre sí
@@ -130,7 +133,7 @@ export default function ExpensesScreen({ trip, update }) {
     if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T12:00:00`)))) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
     if (!members.some((m) => m.id === gform.paidBy)) return notify('Elige quién ha pagado');
     const gid = uid();
-    const exp = { id: uid(), category: gform.category, concept: gform.concept.trim(), amount, date, groupId: gid, ...(orig ? { orig } : {}) };
+    const exp = { id: uid(), category: gform.category, concept: gform.concept.trim(), amount, date, groupId: gid, by: me.id, byName: me.name, ...(orig ? { orig } : {}) };
     update({ expenses: [...expenses, exp], group: { ...group, expenses: [...group.expenses, groupExpense(exp, gid, gform)] } });
     setGform({ ...gform, concept: '', amount: '', participants: [] });
   };
@@ -141,7 +144,8 @@ export default function ExpensesScreen({ trip, update }) {
     setSharing(null);
   };
   const unshare = (e) => update({ expenses: expenses.map((x) => { if (x.id !== e.id) return x; const { groupId: _g, ...rest } = x; return rest; }), group: { ...group, expenses: group.expenses.filter((g) => g.id !== e.groupId) } });
-  const remove = (e) => confirm(linkOf(e) ? '¿Eliminar gasto? También se quitará del gasto en grupo.' : '¿Eliminar gasto?', () => update({ expenses: expenses.filter((x) => x.id !== e.id), ...(linkOf(e) ? { group: { ...group, expenses: group.expenses.filter((g) => g.id !== e.groupId) } } : {}) }));
+  const canEdit = (e) => !e.by || e.by === me.id;
+  const remove = (e) => !canEdit(e) ? notify('No puedes eliminarlo', `Este gasto lo añadió ${e.byName || 'otra persona'}; solo esa persona puede eliminarlo.`) : confirm(linkOf(e) ? '¿Eliminar gasto? También se quitará del gasto en grupo.' : '¿Eliminar gasto?', () => update({ expenses: expenses.filter((x) => x.id !== e.id), ...(linkOf(e) ? { group: { ...group, expenses: group.expenses.filter((g) => g.id !== e.groupId) } } : {}) }));
   // Importa (o actualiza) un gasto automático conservando su vínculo con el grupo
   const importCost = (flag, category, concept, amount) => {
     const old = expenses.find((e) => e[flag]);
@@ -159,6 +163,9 @@ export default function ExpensesScreen({ trip, update }) {
   // Deudas pagadas con el botón Pagar de Grupo (group.expenses con settlement:true): se restan del total general
   const settledTotal = group.expenses.filter((e) => e.settlement).reduce((a, e) => a + num(e.amount), 0);
   const netTotal = r2(total - settledTotal);
+  const myTotal = expenses.filter((e) => e.by === me.id).reduce((a, e) => a + num(e.amount), 0);
+  const byPerson = {};
+  expenses.forEach((e) => { if (e.by) byPerson[e.by] = { name: e.byName || 'Alguien', total: (byPerson[e.by]?.total || 0) + num(e.amount) }; });
   const routesCost = (trip.routes || []).reduce((a, r) => a + num(r.cost), 0);
   const hotelsCost = (trip.hotels || []).reduce((a, h) => {
     const diff = h.checkIn && h.checkOut ? Math.round((new Date(`${h.checkOut}T12:00:00`) - new Date(`${h.checkIn}T12:00:00`)) / 864e5) : 0;
@@ -173,6 +180,8 @@ export default function ExpensesScreen({ trip, update }) {
         <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, marginBottom: 6 }}>{money(netTotal)}</Text>
         <Row label="Suma de todos los gastos" value={money(total)} />
         <Row label="💸 Deudas pagadas en el grupo" value={settledTotal > 0 ? `− ${money(settledTotal)}` : money(0)} />
+        <Row label="👤 Añadidos por mí" value={money(myTotal)} />
+        {Object.entries(byPerson).filter(([id]) => id !== me.id).map(([id, p]) => <Row key={id} label={`• ${p.name}`} value={money(p.total)} />)}
         <Muted style={{ marginTop: 4 }}>Cuando alguien paga una deuda con el botón Pagar de Grupo, ese importe se resta del total gastado.</Muted>
       </Card>
 
@@ -258,7 +267,7 @@ export default function ExpensesScreen({ trip, update }) {
               return (
                 <View key={e.id} style={{ paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{fmtDMY(e.date)}{e.orig ? ` · ${e.orig.amount} ${e.orig.currency}` : ''}</Text></Text>
+                    <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{fmtDMY(e.date)}{e.orig ? ` · ${e.orig.amount} ${e.orig.currency}` : ''}{e.byName ? ` · ${e.byName}` : ''}</Text></Text>
                     <Text style={{ fontWeight: '700' }}>{money(e.amount)}</Text>
                     <Text style={{ color: colors.danger, paddingLeft: 12 }} onPress={() => remove(e)}>✕</Text>
                   </View>
@@ -273,15 +282,19 @@ export default function ExpensesScreen({ trip, update }) {
       <Card>
         <H>Movimientos</H>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          <Chip title="Todos" active={!filter} onPress={() => setFilter(null)} />
+          <Chip title="👥 Todos" active={!onlyMine} onPress={() => setOnlyMine(false)} />
+          <Chip title="👤 Solo los míos" active={onlyMine} onPress={() => setOnlyMine(true)} />
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <Chip title="Todas" active={!filter} onPress={() => setFilter(null)} />
           {CATEGORIES.map(([k, , icon]) => <Chip key={k} title={icon} active={filter === k} onPress={() => setFilter(k)} />)}
         </View>
-        {expenses.filter((e) => !filter || catKey(e) === filter).map((e) => {
+        {expenses.filter((e) => (!filter || catKey(e) === filter) && (!onlyMine || e.by === me.id)).map((e) => {
           const link = linkOf(e);
           return (
             <View key={e.id} style={{ paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{fmtDMY(e.date)}{e.orig ? ` · ${e.orig.amount} ${e.orig.currency}` : ''}</Text></Text>
+                <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{fmtDMY(e.date)}{e.orig ? ` · ${e.orig.amount} ${e.orig.currency}` : ''}{e.byName ? ` · ${e.byName}` : ''}</Text></Text>
                 <Text style={{ fontWeight: '700' }}>{money(e.amount)}</Text>
                 <Text style={{ color: colors.danger, paddingLeft: 12 }} onPress={() => remove(e)}>✕</Text>
               </View>
