@@ -34,12 +34,33 @@ export default function HotelsScreen({ trip, update }) {
   };
 
   // Hotel elegido dentro del navegador de Booking: rellena nombre, enlaces de Booking y de Maps
+  // El precio que muestra Booking es el de la estancia (todas las noches y habitaciones): se divide para sacar el precio por noche y habitación
   const pickHotel = (d) => {
     setForm((f) => {
-      const n = { ...f, name: d.name || f.name, address: d.address || f.address, city: f.city || d.city || '', bookingUrl: d.url, lat: d.lat, lng: d.lng };
+      const nn = datesBetween(f.checkIn, f.checkOut).length;
+      const rm = Math.max(1, Math.round(num(f.rooms)) || 1);
+      const perNight = d.price ? Math.round((d.price / Math.max(1, nn) / rm) * 100) / 100 : null;
+      const n = { ...f, name: d.name || f.name, address: d.address || f.address, city: f.city || d.city || '', bookingUrl: d.url, lat: d.lat, lng: d.lng, ...(perNight ? { pricePerNight: String(perNight) } : {}) };
       return { ...n, mapsUrl: mapsFor(n) };
     });
     setBrowserUrl(null);
+  };
+
+  // Mantiene el gasto del hotel (categoría Hoteles) sincronizado con su coste total; conserva su vínculo con el grupo
+  const hotelExpensePatch = (hid, h) => {
+    const expenses = trip.expenses || [];
+    const group = trip.group || { members: [], expenses: [] };
+    const old = expenses.find((e) => e.hotelId === hid);
+    const rest = expenses.filter((e) => e.hotelId !== hid);
+    const amount = h ? Math.round((Number(h.pricePerNight) || 0) * Math.max(1, Number(h.rooms) || 1) * datesBetween(h.checkIn, h.checkOut).length * 100) / 100 : 0;
+    if (!(amount > 0)) {
+      if (!old) return {};
+      return { expenses: rest, ...(old.groupId ? { group: { ...group, expenses: (group.expenses || []).filter((g) => g.id !== old.groupId) } } : {}) };
+    }
+    const next = { id: old ? old.id : uid(), category: 'hoteles', concept: `Hotel ${h.name}`, amount, date: h.checkIn || '', hotelId: hid, ...(old && old.groupId ? { groupId: old.groupId } : {}) };
+    const patch = { expenses: [...rest, next] };
+    if (old && old.groupId) patch.group = { ...group, expenses: (group.expenses || []).map((g) => (g.id === old.groupId ? { ...g, amount, concept: next.concept, date: next.date } : g)) };
+    return patch;
   };
 
   const save = () => {
@@ -57,9 +78,10 @@ export default function HotelsScreen({ trip, update }) {
       mapsUrl: form.mapsUrl || mapsFor({ name, address: form.address, city, lat: form.lat, lng: form.lng }),
       peoplePerRoom: Math.max(1, Math.round(num(form.peoplePerRoom)) || 1), rooms: Math.max(1, Math.round(num(form.rooms)) || 1),
     };
-    const list = form.id ? hotels.map((x) => (x.id === form.id ? h : x)) : [...hotels, { ...h, id: uid() }];
+    const hid = form.id || uid();
+    const list = form.id ? hotels.map((x) => (x.id === form.id ? h : x)) : [...hotels, { ...h, id: hid }];
     list.sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
-    update({ hotels: list });
+    update({ hotels: list, ...hotelExpensePatch(hid, { ...h, id: hid }) });
     setForm(null);
   };
 
@@ -84,6 +106,7 @@ export default function HotelsScreen({ trip, update }) {
           <Field label="Nombre del hotel *" value={form.name} onChangeText={(v) => set('name', v)} />
           <Field label="Dirección (para Google Maps)" value={form.address} onChangeText={(v) => set('address', v)} />
           <Field label="Enlace de Booking del hotel" value={form.bookingUrl} onChangeText={(v) => set('bookingUrl', v)} autoCapitalize="none" placeholder="https://www.booking.com/hotel/..." />
+          {num(form.pricePerNight) > 0 ? <Muted>≈ {money(num(form.pricePerNight) * Math.max(1, num(form.rooms) || 1) / Math.max(1, (num(form.peoplePerRoom) || 1) * Math.max(1, num(form.rooms) || 1)))} por persona y noche · se añade a Gastos › Hoteles al guardar</Muted> : null}
           <LinkText url={form.mapsUrl || mapsFor(form)}>📍 Enlace de Google Maps (automático)</LinkText>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><Field label="Precio/noche por habitación (€)" value={String(form.pricePerNight)} onChangeText={(v) => set('pricePerNight', v)} keyboardType="decimal-pad" /></View>
@@ -120,7 +143,7 @@ export default function HotelsScreen({ trip, update }) {
             <LinkText url={h.mapsUrl || mapsFor(h)}>Ver en Google Maps</LinkText>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Btn small title="Editar" kind="outline" style={{ flex: 1 }} onPress={() => setForm({ ...h, pricePerNight: String(h.pricePerNight), peoplePerRoom: String(h.peoplePerRoom), rooms: String(h.rooms) })} />
-              <Btn small title="Eliminar" kind="danger" style={{ flex: 1 }} onPress={() => confirm('¿Eliminar hotel?', () => update({ hotels: hotels.filter((x) => x.id !== h.id) }))} />
+              <Btn small title="Eliminar" kind="danger" style={{ flex: 1 }} onPress={() => confirm('¿Eliminar hotel? También se quitará su gasto.', () => update({ hotels: hotels.filter((x) => x.id !== h.id), ...hotelExpensePatch(h.id, null) }))} />
             </View>
           </Card>
         );

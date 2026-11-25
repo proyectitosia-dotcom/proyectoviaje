@@ -8,6 +8,7 @@ export const CATEGORIES = [
   ['vuelo', 'Coste vuelo', '✈️'],
   ['transporte', 'Costes de transporte', '🚆'],
   ['comida', 'Coste de comida', '🍽️'],
+  ['hoteles', 'Coste de hoteles', '🏨'],
   ['entradas', 'Coste de entradas', '🎟️'],
   ['otros', 'Otros costes', '🧾'],
 ];
@@ -108,7 +109,6 @@ export default function ExpensesScreen({ trip, update }) {
         </View>
         <Muted style={{ marginTop: 6 }}>Referencia: rutas registradas {money(routesCost)} · hoteles {money(hotelsCost)}</Muted>
         {routesCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromRoutes) ? 'Actualizar' : 'Importar'} coste de rutas en Transporte`} onPress={() => importCost('fromRoutes', 'transporte', 'Rutas del viaje', routesCost)} />}
-        {hotelsCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromHotels) ? 'Actualizar' : 'Importar'} coste de hoteles en Otros`} onPress={() => importCost('fromHotels', 'otros', 'Alojamiento', hotelsCost)} />}
       </Card>
 
       <Card>

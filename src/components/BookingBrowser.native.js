@@ -4,7 +4,7 @@ import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Btn, Muted, Text, useTheme } from './ui';
 
-// Lee de la página de un hotel de Booking su nombre, dirección y coordenadas (JSON-LD)
+// Lee de la página de un hotel de Booking: nombre, dirección, coordenadas y precio
 const EXTRACT = `(function(){try{
   var d={url:location.href,title:document.title};
   var og=document.querySelector('meta[property="og:title"]'); if(og&&og.content) d.title=og.content;
@@ -16,6 +16,22 @@ const EXTRACT = `(function(){try{
       if(o.geo){ d.lat=o.geo.latitude; d.lng=o.geo.longitude; }
     }});
   }catch(e){}});
+  function txt(sel){var e=document.querySelector(sel);return e?e.textContent.replace(/\\s+/g,' ').trim():'';}
+  if(!d.name) d.name=txt('#hp_hotel_name')||txt('h2.pp-header__title')||txt('[data-testid="property-name"]')||txt('h2');
+  if(!d.address) d.address=txt('[data-testid="address"]')||txt('#hp_address_subtitle')||txt('.hp_address_subtitle');
+  if(!d.lat){var m=document.querySelector('[data-atlas-latlng]'); if(m){var ll=m.getAttribute('data-atlas-latlng').split(','); d.lat=parseFloat(ll[0]); d.lng=parseFloat(ll[1]);}}
+  function parse(t){var x=(t||'').replace(/[^0-9.,]/g,''); if(!x) return 0;
+    var lc=x.lastIndexOf(','), ld=x.lastIndexOf('.'), sep=Math.max(lc,ld);
+    if(sep<0) return parseFloat(x);
+    var dec=x.length-sep-1;
+    if((lc>=0&&ld>=0)||dec!==3) return parseFloat(x.slice(0,sep).replace(/[.,]/g,'')+'.'+x.slice(sep+1));
+    return parseFloat(x.replace(/[.,]/g,''));}
+  var best=0, bestTxt='';
+  document.querySelectorAll('[data-testid="price-and-discounted-price"],.prco-valign-middle-helper,.bui-price-display__value,.hprt-price-price,[data-testid="price-for-x-nights"]').forEach(function(e){
+    var t=e.textContent.replace(/\\s+/g,' ').trim(), v=parse(t);
+    if(v>0 && (!best||v<best)){best=v;bestTxt=t;}
+  });
+  if(best){d.price=best; d.priceText=bestTxt;}
   window.ReactNativeWebView.postMessage(JSON.stringify(d));
 }catch(e){} true;})();`;
 
@@ -72,6 +88,7 @@ export default function BookingBrowser({ visible, url, onClose, onPick }) {
           <View style={{ padding: 10, gap: 6, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.card }}>
             <Text style={{ fontWeight: '700' }} numberOfLines={2}>{info.name || 'Hotel de Booking'}</Text>
             {info.address ? <Muted>{info.address}</Muted> : null}
+            {info.priceText ? <Muted>Precio detectado: {info.priceText}</Muted> : null}
             <Btn title="✔ Usar este hotel (guarda enlaces de Booking y Maps)" kind="ok" onPress={pick} />
           </View>
         ) : null}
