@@ -169,6 +169,14 @@ export default function ExpensesScreen({ trip, update }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 14 }}>
       <Card>
+        <H>💰 Total gastado</H>
+        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, marginBottom: 6 }}>{money(netTotal)}</Text>
+        <Row label="Suma de todos los gastos" value={money(total)} />
+        <Row label="💸 Deudas pagadas en el grupo" value={settledTotal > 0 ? `− ${money(settledTotal)}` : money(0)} />
+        <Muted style={{ marginTop: 4 }}>Cuando alguien paga una deuda con el botón Pagar de Grupo, ese importe se resta del total gastado.</Muted>
+      </Card>
+
+      <Card>
         <H>Resumen de gastos</H>
         {CATEGORIES.map(([k, label, icon]) => (
           <View key={k}>
@@ -179,8 +187,7 @@ export default function ExpensesScreen({ trip, update }) {
           </View>
         ))}
         <View style={{ borderTopWidth: 1, borderColor: colors.border, marginTop: 6, paddingTop: 6 }}>
-          {settledTotal > 0 && <Row label="💸 Deudas pagadas en el grupo" value={`− ${money(settledTotal)}`} />}
-          <Row label="TOTAL" value={money(netTotal)} />
+          <Row label="Suma de gastos" value={money(total)} />
         </View>
         <Muted style={{ marginTop: 6 }}>Referencia: rutas registradas {money(routesCost)} · hoteles {money(hotelsCost)}</Muted>
         {routesCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromRoutes) ? 'Actualizar' : 'Importar'} coste de rutas en Transporte`} onPress={() => importCost('fromRoutes', 'transporte', 'Rutas del viaje', routesCost)} />}
