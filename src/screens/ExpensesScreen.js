@@ -107,7 +107,6 @@ export default function ExpensesScreen({ trip, update }) {
   };
   const [sharing, setSharing] = useState(null); // { id, paidBy, participants } al compartir un gasto existente
   const [filter, setFilter] = useState(null);
-  const [onlyMine, setOnlyMine] = useState(false);
   const nameOf = (id) => members.find((m) => m.id === id)?.name || '?';
   // Gasto de grupo vinculado a un gasto del viaje (si el gasto de grupo se borra desde Grupo, deja de estar vinculado)
   const linkOf = (e) => (e.groupId ? group.expenses.find((g) => g.id === e.groupId) : null);
@@ -148,9 +147,9 @@ export default function ExpensesScreen({ trip, update }) {
   const remove = (e) => !canEdit(e) ? notify('No puedes eliminarlo', `Este gasto lo añadió ${e.byName || 'otra persona'}; solo esa persona puede eliminarlo.`) : confirm(linkOf(e) ? '¿Eliminar gasto? También se quitará del gasto en grupo.' : '¿Eliminar gasto?', () => update({ expenses: expenses.filter((x) => x.id !== e.id), ...(linkOf(e) ? { group: { ...group, expenses: group.expenses.filter((g) => g.id !== e.groupId) } } : {}) }));
   // Importa (o actualiza) un gasto automático conservando su vínculo con el grupo
   const importCost = (flag, category, concept, amount) => {
-    const old = expenses.find((e) => e[flag]);
-    const next = { id: uid(), category, concept, amount, [flag]: true, ...(old?.groupId ? { groupId: old.groupId } : {}) };
-    const patch = { expenses: [...expenses.filter((e) => !e[flag]), next] };
+    const old = expenses.find((e) => e[flag] && e.by === me.id);
+    const next = { id: uid(), category, concept, amount, by: me.id, byName: me.name, [flag]: true, ...(old?.groupId ? { groupId: old.groupId } : {}) };
+    const patch = { expenses: [...expenses.filter((e) => !(e[flag] && e.by === me.id)), next] };
     if (old && linkOf(old)) patch.group = { ...group, expenses: group.expenses.map((g) => (g.id === old.groupId ? { ...g, amount, expenseId: next.id } : g)) };
     update(patch);
   };
@@ -158,14 +157,10 @@ export default function ExpensesScreen({ trip, update }) {
   const sharedExpenses = expenses.filter((e) => linkOf(e));
   const sharedTotal = sharedExpenses.reduce((a, e) => a + num(e.amount), 0);
   const catKey = (e) => (CATEGORIES.some(([k]) => k === e.category) ? e.category : 'otros');
-  const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, expenses.filter((e) => catKey(e) === k).reduce((a, e) => a + num(e.amount), 0)]));
-  const total = Object.values(byCat).reduce((a, b) => a + b, 0); // suma por categorías (base de los porcentajes)
-  // Deudas pagadas con el botón Pagar de Grupo (group.expenses con settlement:true): se restan del total general
-  const settledTotal = group.expenses.filter((e) => e.settlement).reduce((a, e) => a + num(e.amount), 0);
-  const netTotal = r2(total - settledTotal);
-  const myTotal = expenses.filter((e) => e.by === me.id).reduce((a, e) => a + num(e.amount), 0);
-  const byPerson = {};
-  expenses.forEach((e) => { if (e.by) byPerson[e.by] = { name: e.byName || 'Alguien', total: (byPerson[e.by]?.total || 0) + num(e.amount) }; });
+  // Total y resumen INDIVIDUALES: solo los gastos personales que he añadido yo (los gastos en grupo se ven entre todos en la pestaña Grupo)
+  const mine = expenses.filter((e) => e.by === me.id && !linkOf(e));
+  const byCat = Object.fromEntries(CATEGORIES.map(([k]) => [k, mine.filter((e) => catKey(e) === k).reduce((a, e) => a + num(e.amount), 0)]));
+  const total = r2(Object.values(byCat).reduce((a, b) => a + b, 0));
   const routesCost = (trip.routes || []).reduce((a, r) => a + num(r.cost), 0);
   const hotelsCost = (trip.hotels || []).reduce((a, h) => {
     const diff = h.checkIn && h.checkOut ? Math.round((new Date(`${h.checkOut}T12:00:00`) - new Date(`${h.checkIn}T12:00:00`)) / 864e5) : 0;
@@ -176,17 +171,13 @@ export default function ExpensesScreen({ trip, update }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 14 }}>
       <Card>
-        <H>💰 Total gastado</H>
-        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, marginBottom: 6 }}>{money(netTotal)}</Text>
-        <Row label="Suma de todos los gastos" value={money(total)} />
-        <Row label="💸 Deudas pagadas en el grupo" value={settledTotal > 0 ? `− ${money(settledTotal)}` : money(0)} />
-        <Row label="👤 Añadidos por mí" value={money(myTotal)} />
-        {Object.entries(byPerson).filter(([id]) => id !== me.id).map(([id, p]) => <Row key={id} label={`• ${p.name}`} value={money(p.total)} />)}
-        <Muted style={{ marginTop: 4 }}>Cuando alguien paga una deuda con el botón Pagar de Grupo, ese importe se resta del total gastado.</Muted>
+        <H>💰 Mi total gastado</H>
+        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, marginBottom: 6 }}>{money(total)}</Text>
+        <Muted>Solo cuenta los gastos que has añadido tú. Los gastos en grupo se ven entre todos en la pestaña Grupo.</Muted>
       </Card>
 
       <Card>
-        <H>Resumen de gastos</H>
+        <H>Mi resumen de gastos</H>
         {CATEGORIES.map(([k, label, icon]) => (
           <View key={k}>
             <Row label={`${icon} ${label}${total > 0 ? ` (${Math.round((byCat[k] / total) * 100)}%)` : ''}`} value={money(byCat[k])} />
@@ -196,10 +187,10 @@ export default function ExpensesScreen({ trip, update }) {
           </View>
         ))}
         <View style={{ borderTopWidth: 1, borderColor: colors.border, marginTop: 6, paddingTop: 6 }}>
-          <Row label="Suma de gastos" value={money(total)} />
+          <Row label="Total" value={money(total)} />
         </View>
         <Muted style={{ marginTop: 6 }}>Referencia: rutas registradas {money(routesCost)} · hoteles {money(hotelsCost)}</Muted>
-        {routesCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromRoutes) ? 'Actualizar' : 'Importar'} coste de rutas en Transporte`} onPress={() => importCost('fromRoutes', 'transporte', 'Rutas del viaje', routesCost)} />}
+        {routesCost > 0 && <Btn small kind="outline" title={`${expenses.some((e) => e.fromRoutes && e.by === me.id) ? 'Actualizar' : 'Importar'} coste de rutas en Transporte`} onPress={() => importCost('fromRoutes', 'transporte', 'Rutas del viaje', routesCost)} />}
       </Card>
 
       <Card>
@@ -280,16 +271,12 @@ export default function ExpensesScreen({ trip, update }) {
       </Card>
 
       <Card>
-        <H>Movimientos</H>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          <Chip title="👥 Todos" active={!onlyMine} onPress={() => setOnlyMine(false)} />
-          <Chip title="👤 Solo los míos" active={onlyMine} onPress={() => setOnlyMine(true)} />
-        </View>
+        <H>Mis movimientos</H>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <Chip title="Todas" active={!filter} onPress={() => setFilter(null)} />
           {CATEGORIES.map(([k, , icon]) => <Chip key={k} title={icon} active={filter === k} onPress={() => setFilter(k)} />)}
         </View>
-        {expenses.filter((e) => (!filter || catKey(e) === filter) && (!onlyMine || e.by === me.id)).map((e) => {
+        {mine.filter((e) => !filter || catKey(e) === filter).map((e) => {
           const link = linkOf(e);
           return (
             <View key={e.id} style={{ paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
@@ -318,7 +305,7 @@ export default function ExpensesScreen({ trip, update }) {
             </View>
           );
         })}
-        {!expenses.length && <Muted>Sin gastos todavía.</Muted>}
+        {!mine.length && <Muted>Todavía no has añadido gastos.</Muted>}
       </Card>
     </ScrollView>
   );
