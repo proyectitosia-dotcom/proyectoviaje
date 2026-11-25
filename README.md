@@ -24,6 +24,11 @@ npx expo start
 ```
 Escanea el QR con **Expo Go** (Android o iOS).
 
+### Windows: doble clic
+1. Instala [Node.js LTS](https://nodejs.org).
+2. Descarga el proyecto (con `git clone` o en ZIP desde GitHub) y descomprímelo.
+3. Haz doble clic en **`Iniciar Proyecto Viaje.bat`**: instala lo necesario la primera vez y abre la app en el navegador.
+
 ### Ejecutar en el ordenador (navegador)
 ```bash
 npm run web
