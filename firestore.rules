@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cualquiera que conozca el código del viaje puede leerlo y editarlo.
+    match /trips/{tripId} {
+      allow read, create, update: if true;
+      allow delete: if false;
+    }
+  }
+}

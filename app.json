@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Proyecto Viaje",
+    "slug": "proyectoviaje",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.proyectoviaje.app"
+    },
+    "android": {
+      "package": "com.proyectoviaje.app"
+    },
+    "plugins": [
+      "expo-asset"
+    ]
+  }
+}
