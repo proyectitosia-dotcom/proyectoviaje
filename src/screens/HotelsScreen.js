@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text, Linking } from 'react-native';
-import { Card, H, Field, Btn, Row, LinkText, Muted, confirm, notify } from '../components/ui';
+import { ScrollView, View, Linking } from 'react-native';
+import { Card, H, Field, Btn, Row, LinkText, Muted, confirm, notify , Text, DateField } from '../components/ui';
 import { uid } from '../store';
-import { money, num, addDays, datesBetween, formatDate, bookingSearchUrl, googleMapsPlaceUrl } from '../utils';
+import { money, num, addDays, datesBetween, formatDate, fmtDMY, bookingSearchUrl, googleMapsPlaceUrl } from '../utils';
 
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && addDays(s, 0) === s;
 const normUrl = (u) => { const t = (u || '').trim(); return !t ? '' : /^https?:\/\//i.test(t) ? t : `https://${t}`; };
@@ -20,7 +20,7 @@ export default function HotelsScreen({ trip, update }) {
     const ci = (form.checkIn || '').trim(), co = (form.checkOut || '').trim();
     const okDates = isDate(ci) && isDate(co) && co > ci;
     if (ci || co) {
-      if (!okDates) notify('Fechas no válidas', 'Se buscará sin fechas. La salida debe ser posterior a la entrada (AAAA-MM-DD).');
+      if (!okDates) notify('Fechas no válidas', 'Se buscará sin fechas. La salida debe ser posterior a la entrada.');
     }
     const rooms = Math.max(1, Math.round(num(form.rooms)) || 1);
     const adults = Math.max(1, Math.round(num(form.peoplePerRoom)) || 1) * rooms;
@@ -31,8 +31,8 @@ export default function HotelsScreen({ trip, update }) {
     const name = (form.name || '').trim(), city = (form.city || '').trim();
     if (!name || !city) return notify('Faltan datos', 'El nombre del hotel y la ciudad son obligatorios.');
     const ci = (form.checkIn || '').trim(), co = (form.checkOut || '').trim();
-    if (ci && !isDate(ci)) return notify('Fecha de entrada no válida', 'Usa el formato AAAA-MM-DD (p. ej. 2026-07-01).');
-    if (co && !isDate(co)) return notify('Fecha de salida no válida', 'Usa el formato AAAA-MM-DD (p. ej. 2026-07-04).');
+    if (ci && !isDate(ci)) return notify('Fecha de entrada no válida', 'Elige la fecha en el calendario.');
+    if (co && !isDate(co)) return notify('Fecha de salida no válida', 'Elige la fecha en el calendario.');
     if ((ci && !co) || (!ci && co)) return notify('Faltan fechas', 'Indica tanto la entrada como la salida.');
     if (ci && co && co <= ci) return notify('Fechas incorrectas', 'La fecha de salida debe ser posterior a la de entrada.');
     const price = num(form.pricePerNight);
@@ -56,8 +56,8 @@ export default function HotelsScreen({ trip, update }) {
           <H>{form.id ? 'Editar hotel' : 'Buscar y añadir hotel'}</H>
           <Field label="Ciudad *" value={form.city} onChangeText={(v) => set('city', v)} placeholder="Roma" />
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}><Field label="Entrada (AAAA-MM-DD)" value={form.checkIn} onChangeText={(v) => set('checkIn', v)} placeholder="2026-07-01" /></View>
-            <View style={{ flex: 1 }}><Field label="Salida (AAAA-MM-DD)" value={form.checkOut} onChangeText={(v) => set('checkOut', v)} placeholder="2026-07-04" /></View>
+            <View style={{ flex: 1 }}><DateField label="Entrada" value={form.checkIn} onChange={(v) => set('checkIn', v)} /></View>
+            <View style={{ flex: 1 }}><DateField label="Salida" value={form.checkOut} onChange={(v) => set('checkOut', v)} /></View>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><Field label="Personas/habitación" value={form.peoplePerRoom} onChangeText={(v) => set('peoplePerRoom', v)} keyboardType="number-pad" /></View>
@@ -97,7 +97,7 @@ export default function HotelsScreen({ trip, update }) {
             <Row label="Precio por persona (estancia)" value={money(total / people)} />
             <Row label={`Total (${nights.length} ${nights.length === 1 ? 'noche' : 'noches'})`} value={money(total)} />
             <Text style={{ marginTop: 6, fontWeight: '600' }}>Días de estancia</Text>
-            {nights.length ? nights.map((d) => <Muted key={d}>• {formatDate(d)} ({d}) — {money(perNightTotal)}</Muted>) : <Muted>Indica fechas de entrada y salida</Muted>}
+            {nights.length ? nights.map((d) => <Muted key={d}>• {formatDate(d)} ({fmtDMY(d)}) — {money(perNightTotal)}</Muted>) : <Muted>Indica fechas de entrada y salida</Muted>}
             {bookingHref ? <LinkText url={bookingHref}>Ver en Booking.com</LinkText>
               : <LinkText url={bookingSearchUrl({ city: `${h.name} ${h.city}`, checkIn: nights.length ? h.checkIn : undefined, checkOut: nights.length ? h.checkOut : undefined })}>Buscar en Booking.com</LinkText>}
             <LinkText url={googleMapsPlaceUrl([h.name, h.address, h.city].filter(Boolean).join(' '))}>Ver en Google Maps</LinkText>

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text } from 'react-native';
-import { Card, H, Field, Btn, Chip, Row, Muted, colors, confirm, notify } from '../components/ui';
+import { ScrollView, View } from 'react-native';
+import { Card, H, Field, Btn, Chip, Row, Muted, confirm, notify , Text, DateField, useTheme } from '../components/ui';
 import { uid } from '../store';
-import { money, num } from '../utils';
+import { money, num, fmtDMY } from '../utils';
 
 export const CATEGORIES = [
   ['vuelo', 'Coste vuelo', '✈️'],
@@ -13,6 +13,7 @@ export const CATEGORIES = [
 ];
 
 export default function ExpensesScreen({ trip, update }) {
+  const { colors } = useTheme();
   const expenses = trip.expenses || [];
   const [form, setForm] = useState({ category: 'vuelo', concept: '', amount: '', date: '' });
   const [filter, setFilter] = useState(null);
@@ -21,7 +22,7 @@ export default function ExpensesScreen({ trip, update }) {
     const amount = Math.round(num(form.amount) * 100) / 100;
     if (!(amount > 0)) return notify('Importe no válido', 'Introduce un importe mayor que 0.');
     const date = form.date.trim();
-    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T12:00:00`)))) return notify('Fecha no válida', 'Usa el formato AAAA-MM-DD.');
+    if (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(`${date}T12:00:00`)))) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
     update({ expenses: [...expenses, { ...form, concept: form.concept.trim(), date, amount, id: uid() }] });
     setForm({ ...form, concept: '', amount: '' });
   };
@@ -63,7 +64,7 @@ export default function ExpensesScreen({ trip, update }) {
         <Field label="Concepto" value={form.concept} onChangeText={(v) => setForm({ ...form, concept: v })} placeholder="Ej. Entradas Coliseo" />
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <View style={{ flex: 1 }}><Field label="Importe (€)" value={form.amount} onChangeText={(v) => setForm({ ...form, amount: v })} keyboardType="decimal-pad" /></View>
-          <View style={{ flex: 1 }}><Field label="Fecha" value={form.date} onChangeText={(v) => setForm({ ...form, date: v })} placeholder="AAAA-MM-DD" /></View>
+          <View style={{ flex: 1 }}><DateField label="Fecha" value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></View>
         </View>
         <Btn title="Añadir" onPress={add} />
       </Card>
@@ -76,7 +77,7 @@ export default function ExpensesScreen({ trip, update }) {
         </View>
         {expenses.filter((e) => !filter || catKey(e) === filter).map((e) => (
           <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
-            <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{e.date}</Text></Text>
+            <Text style={{ flex: 1 }}>{CATEGORIES.find((c) => c[0] === catKey(e))?.[2]} {e.concept || '-'} <Text style={{ color: colors.muted }}>{fmtDMY(e.date)}</Text></Text>
             <Text style={{ fontWeight: '700' }}>{money(e.amount)}</Text>
             <Text style={{ color: colors.danger, paddingLeft: 12 }} onPress={() => confirm('¿Eliminar gasto?', () => update({ expenses: expenses.filter((x) => x.id !== e.id) }))}>✕</Text>
           </View>

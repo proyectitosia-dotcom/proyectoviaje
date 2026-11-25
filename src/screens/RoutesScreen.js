@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text } from 'react-native';
-import { Card, H, Field, Btn, Row, LinkText, Chip, Label, Muted, confirm, notify } from '../components/ui';
+import { ScrollView, View } from 'react-native';
+import { Card, H, Field, Btn, Row, LinkText, Chip, Label, Muted, confirm, notify , Text, DateField } from '../components/ui';
 import { uid } from '../store';
-import { money, num, googleMapsRouteUrl, formatDate } from '../utils';
+import { money, num, googleMapsRouteUrl, fmtDMY } from '../utils';
 
 const TRANSPORTS = ['Avión', 'Tren', 'Autobús', 'Metro', 'Tranvía', 'Coche', 'Taxi', 'Barco', 'A pie', 'Bici'];
 const MODES = [['transit', 'Transporte público'], ['driving', 'Coche'], ['walking', 'A pie'], ['bicycling', 'Bici']];
@@ -46,7 +46,7 @@ export default function RoutesScreen({ trip, update }) {
     if (!origin || !destination) return notify('Faltan datos', 'El origen y el destino son obligatorios.');
     const date = form.date.trim();
     const time = form.time.trim();
-    if (date && !validDate(date)) return notify('Fecha no válida', 'Usa el formato AAAA-MM-DD, por ejemplo 2026-07-01.');
+    if (date && !validDate(date)) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
     if (time && !validTime(time)) return notify('Hora no válida', 'Usa el formato HH:MM de 24 horas, por ejemplo 08:30.');
     const cost = num(form.cost);
     if (cost < 0) return notify('Coste no válido', 'El coste no puede ser negativo.');
@@ -88,7 +88,7 @@ export default function RoutesScreen({ trip, update }) {
           <Field label="Paradas (separadas por comas)" value={form.stops} onChangeText={(v) => set('stops', v)} placeholder="Zaragoza, Barcelona" />
           <Field label="Destino *" value={form.destination} onChangeText={(v) => set('destination', v)} placeholder="Gare de Lyon, París" />
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}><Field label="Fecha (AAAA-MM-DD)" value={form.date} onChangeText={(v) => set('date', v)} placeholder="2026-07-01" keyboardType="numbers-and-punctuation" /></View>
+            <View style={{ flex: 1 }}><DateField label="Fecha" value={form.date} onChange={(v) => set('date', v)} /></View>
             <View style={{ flex: 1 }}><Field label="Hora salida" value={form.time} onChangeText={(v) => set('time', v)} placeholder="08:30" keyboardType="numbers-and-punctuation" /></View>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -115,7 +115,7 @@ export default function RoutesScreen({ trip, update }) {
       {routes.map((r, i) => (
         <Card key={r.id}>
           <Text style={{ fontWeight: '700', fontSize: 16 }}>{i + 1}. {r.name || `${r.origin} → ${r.destination}`}</Text>
-          <Muted>{r.date ? formatDate(r.date) : 'Sin fecha'}{r.time ? ` · ${r.time}` : ''}</Muted>
+          <Muted>{r.date ? fmtDMY(r.date) : 'Sin fecha'}{r.time ? ` · ${r.time}` : ''}</Muted>
           <Row label="Origen" value={r.origin} />
           {(r.stops || []).length > 0 && <Row label="Paradas" value={(r.stops || []).join(' → ')} />}
           <Row label="Destino" value={r.destination} />

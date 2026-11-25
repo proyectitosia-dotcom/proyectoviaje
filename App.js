@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Share, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, TouchableOpacity, Share, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Card, H, Field, Btn, Muted, colors, confirm, notify } from './src/components/ui';
+import { Card, H, Field, Btn, Muted, Text, DateField, useStyles, confirm, notify } from './src/components/ui';
+import { ThemeProvider, useTheme } from './src/theme';
 import { createTrip, tripExists, subscribeTrip, updateTrip, getMyTrips, addMyTrip, removeMyTrip, isShared } from './src/store';
 import RoutesScreen from './src/screens/RoutesScreen';
 import HotelsScreen from './src/screens/HotelsScreen';
@@ -18,6 +19,11 @@ const TABS = [
   ['grupo', 'Grupo', '👥', GroupScreen],
 ];
 
+function ThemeToggle() {
+  const { mode, toggle } = useTheme();
+  return <Btn small kind="outline" title={mode === 'dark' ? '☀️ Claro' : '🌙 Oscuro'} onPress={toggle} />;
+}
+
 async function shareTrip(name, code) {
   const message = `¡Únete a mi viaje "${name}" en Proyecto Viaje! Código: ${code}`;
   if (Platform.OS === 'web') {
@@ -31,6 +37,8 @@ async function shareTrip(name, code) {
 }
 
 function Home({ onOpen }) {
+  const { colors } = useTheme();
+  const st = useStyles(makeStyles);
   const [trips, setTrips] = useState([]);
   const [name, setName] = useState('');
   const [start, setStart] = useState('');
@@ -54,8 +62,11 @@ function Home({ onOpen }) {
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <Text style={st.title}>✈️ Proyecto Viaje</Text>
-      {!isShared && <Card style={{ backgroundColor: '#FFF6E0' }}><Muted>Modo local: configura Firebase en src/firebaseConfig.js para compartir viajes y sincronizar en tiempo real.</Muted></Card>}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={st.title}>✈️ Proyecto Viaje</Text>
+        <ThemeToggle />
+      </View>
+      {!isShared && <Card style={{ backgroundColor: colors.warn }}><Muted>Modo local: configura Firebase en src/firebaseConfig.js para compartir viajes y sincronizar en tiempo real.</Muted></Card>}
       {trips.length > 0 && (
         <Card>
           <H>Mis viajes</H>
@@ -72,7 +83,7 @@ function Home({ onOpen }) {
       <Card>
         <H>Nuevo viaje</H>
         <Field label="Nombre" value={name} onChangeText={setName} placeholder="Verano en Italia" />
-        <Field label="Fecha de inicio" value={start} onChangeText={setStart} placeholder="AAAA-MM-DD" />
+        <DateField label="Fecha de inicio" value={start} onChange={setStart} />
         <Btn title="Crear viaje" onPress={create} />
       </Card>
       <Card>
@@ -85,6 +96,8 @@ function Home({ onOpen }) {
 }
 
 function Trip({ code, onExit }) {
+  const { colors } = useTheme();
+  const st = useStyles(makeStyles);
   const [trip, setTrip] = useState(undefined);
   const [tab, setTab] = useState('ruta');
   useEffect(() => subscribeTrip(code, (t) => { setTrip(t); if (t) addMyTrip(code, t.name); }), [code]);
@@ -102,6 +115,7 @@ function Trip({ code, onExit }) {
           <Text style={st.hTitle} numberOfLines={1}>{trip.name}</Text>
           <Text style={st.hSub}>Código: {code}{isShared ? ' · en tiempo real' : ' · local'}</Text>
         </View>
+        <ThemeToggle />
         <Btn small title="Compartir" kind="outline" onPress={() => shareTrip(trip.name, code)} />
       </View>
       <View style={{ flex: 1, backgroundColor: colors.bg }}><Screen trip={trip} update={update} code={code} /></View>
@@ -117,12 +131,13 @@ function Trip({ code, onExit }) {
   );
 }
 
-export default function App() {
+function Root() {
+  const { colors, mode } = useTheme();
   const [code, setCode] = useState(null);
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom']}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.card }} edges={['top', 'bottom']}>
+        <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
           {code ? <Trip code={code} onExit={() => setCode(null)} /> : <Home onOpen={setCode} />}
         </View>
@@ -131,12 +146,16 @@ export default function App() {
   );
 }
 
-const st = StyleSheet.create({
+export default function App() {
+  return <ThemeProvider><Root /></ThemeProvider>;
+}
+
+const makeStyles = (colors) => ({
   title: { fontSize: 28, fontWeight: '800', color: colors.text, marginVertical: 12 },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#fff', borderBottomWidth: 1, borderColor: colors.border, gap: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: colors.card, borderBottomWidth: 1, borderColor: colors.border, gap: 8 },
   back: { fontSize: 32, color: colors.primary, paddingHorizontal: 6 },
   hTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   hSub: { fontSize: 12, color: colors.muted },
-  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderColor: colors.border, paddingVertical: 6 },
+  tabs: { flexDirection: 'row', backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border, paddingVertical: 6 },
   tab: { flex: 1, alignItems: 'center' },
 });

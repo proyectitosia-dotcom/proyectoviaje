@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ScrollView, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Card, H, Field, Btn, Chip, Label, Muted, LinkText, colors, confirm, notify } from '../components/ui';
+import { ScrollView, View, TouchableOpacity } from 'react-native';
+import { Card, H, Field, Btn, Chip, Label, Muted, LinkText, confirm, notify , Text, DateField, useTheme, useStyles } from '../components/ui';
 import { uid } from '../store';
-import { addDays, formatDate, googleMapsRouteUrl } from '../utils';
+import { addDays, formatDate, fmtDM, googleMapsRouteUrl } from '../utils';
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const byTime = (a, b) => (a.time ? 0 : 1) - (b.time ? 0 : 1) || (a.time || '').localeCompare(b.time || '');
 
 export default function CalendarScreen({ trip, update }) {
+  const { colors } = useTheme();
+  const st = useStyles(makeStyles);
   const days = trip.days || [];
   const [selId, setSelId] = useState(days[0]?.id);
   const [ev, setEv] = useState({ title: '', time: '', place: '' });
@@ -59,7 +61,7 @@ export default function CalendarScreen({ trip, update }) {
   };
   const saveStart = () => {
     const v = startDate.trim();
-    if (v && (!DATE_RE.test(v) || !addDays(v, 0))) return notify('Fecha no válida', 'Usa el formato AAAA-MM-DD.');
+    if (v && (!DATE_RE.test(v) || !addDays(v, 0))) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
     update({ startDate: v });
   };
   const toggleRoute = (rid) => patchDay({ routeIds: day.routeIds?.includes(rid) ? day.routeIds.filter((x) => x !== rid) : [...(day.routeIds || []), rid] });
@@ -69,7 +71,7 @@ export default function CalendarScreen({ trip, update }) {
       <Card>
         <Label>Fecha de inicio del viaje (día 1)</Label>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <View style={{ flex: 1 }}><Field value={startDate} onChangeText={setStartDate} placeholder="AAAA-MM-DD" /></View>
+          <View style={{ flex: 1 }}><DateField value={startDate} onChange={setStartDate} /></View>
           <Btn small title="Guardar" onPress={saveStart} />
         </View>
         <View style={st.grid}>
@@ -77,8 +79,8 @@ export default function CalendarScreen({ trip, update }) {
             const has = d.plan || d.events?.length || d.routeIds?.length;
             return (
               <TouchableOpacity key={d.id} onPress={() => selectDay(d.id)} style={[st.cell, d.id === day?.id && st.sel]}>
-                <Text style={[st.num, d.id === day?.id && { color: '#fff' }]}>{d.number}</Text>
-                {dateOf(i) && <Text style={[st.small, d.id === day?.id && { color: '#fff' }]}>{dateOf(i).slice(5)}</Text>}
+                <Text style={[st.num, d.id === day?.id && { color: colors.onPrimary }]}>{d.number}</Text>
+                {dateOf(i) && <Text style={[st.small, d.id === day?.id && { color: colors.onPrimary }]}>{fmtDM(dateOf(i))}</Text>}
                 {has ? <View style={st.dot} /> : null}
               </TouchableOpacity>
             );
@@ -128,7 +130,7 @@ export default function CalendarScreen({ trip, update }) {
   );
 }
 
-const st = StyleSheet.create({
+const makeStyles = (colors) => ({
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: 8 },
   cell: { width: '13%', margin: '0.6%', aspectRatio: 1, borderRadius: 8, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   sel: { backgroundColor: colors.primary },

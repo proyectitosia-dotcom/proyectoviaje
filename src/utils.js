@@ -77,3 +77,8 @@ export function settleUp(members, expenses) {
   }
   return { balances: bal, transfers };
 }
+
+// Fechas: se guardan como AAAA-MM-DD y se muestran como dd-mm-aaaa
+export const fmtDMY = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}` : iso || '');
+export const fmtDM = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? `${iso.slice(8, 10)}-${iso.slice(5, 7)}` : '');
+export const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };

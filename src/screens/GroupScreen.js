@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Text } from 'react-native';
-import { Card, H, Field, Btn, Chip, Label, Muted, colors, confirm, notify } from '../components/ui';
+import { ScrollView, View } from 'react-native';
+import { Card, H, Field, Btn, Chip, Label, Muted, confirm, notify , Text, useTheme } from '../components/ui';
 import { uid } from '../store';
 import { money, num, settleUp } from '../utils';
 
 export default function GroupScreen({ trip, update }) {
+  const { colors } = useTheme();
   const group = trip.group || { members: [], expenses: [] };
   const { members, expenses } = group;
   const [name, setName] = useState('');
