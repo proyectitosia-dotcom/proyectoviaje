@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, TouchableOpacity, Share, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Card, H, Field, Btn, Muted, Text, DateField, useStyles, confirm, notify } from './src/components/ui';
 import { ThemeProvider, useTheme } from './src/theme';
 import { UserProvider, useMe } from './src/user';
-import { createTrip, tripExists, subscribeTrip, updateTrip, getMyTrips, addMyTrip, removeMyTrip, isShared } from './src/store';
+import { uid, createTrip, tripExists, subscribeTrip, updateTrip, getMyTrips, addMyTrip, removeMyTrip, isShared } from './src/store';
 import RoutesScreen from './src/screens/RoutesScreen';
 import HotelsScreen from './src/screens/HotelsScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
@@ -127,6 +127,35 @@ function Trip({ code, onExit }) {
   const [tab, setTab] = useState('ruta');
   useEffect(() => subscribeTrip(code, (t) => { setTrip(t); if (t) addMyTrip(code, t.name); }), [code]);
   const update = (patch) => updateTrip(code, patch).catch((e) => notify('Error al guardar', String(e.message || e)));
+
+  // Al entrar en un viaje, la persona se añade sola a los miembros del grupo (una vez por entrada;
+  // se repite a los pocos segundos por si dos personas entran a la vez y una pisa a la otra).
+  const { me } = useMe();
+  const tripRef = useRef(trip);
+  tripRef.current = trip;
+  const joinTrip = () => {
+    const t = tripRef.current;
+    if (!t || !me.name) return;
+    const group = { members: [], expenses: [], ...(t.group || {}) };
+    const members = group.members || [];
+    const mine = members.find((m) => m.userId === me.id);
+    if (mine) {
+      if (mine.name !== me.name) updateTrip(code, { group: { ...group, members: members.map((m) => (m.userId === me.id ? { ...m, name: me.name } : m)) } }).catch(() => {});
+      return;
+    }
+    // Si ya existía un miembro con tu mismo nombre sin vincular, se reclama en vez de duplicarlo
+    const same = members.find((m) => !m.userId && m.name.trim().toLowerCase() === me.name.trim().toLowerCase());
+    const next = same ? members.map((m) => (m === same ? { ...m, userId: me.id } : m)) : [...members, { id: uid(), name: me.name, userId: me.id }];
+    updateTrip(code, { group: { ...group, members: next } }).catch(() => {});
+  };
+  const joinedFor = useRef(null);
+  useEffect(() => {
+    if (!trip || joinedFor.current === code || !me.name) return undefined;
+    joinedFor.current = code;
+    joinTrip();
+    const t = setTimeout(joinTrip, 3000);
+    return () => clearTimeout(t);
+  }, [trip === undefined || trip === null ? 0 : 1, code, me.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (trip === undefined) return <ActivityIndicator style={{ marginTop: 60 }} size="large" />;
   if (trip === null) return <View style={{ padding: 20 }}><Text>Viaje no encontrado.</Text><Btn title="Volver" onPress={onExit} /></View>;
