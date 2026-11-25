@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { Card, H, Field, Btn, Chip, Label, Muted, confirm, notify , Text, useTheme } from '../components/ui';
+import { ScrollView, View, Modal } from 'react-native';
+import { Card, H, Field, Btn, Chip, Muted, confirm, notify, Text, useTheme } from '../components/ui';
 import { uid } from '../store';
-import { money, num, settleUp } from '../utils';
+import { money, num, settleUp, todayISO, fmtDMY } from '../utils';
 
 export default function GroupScreen({ trip, update }) {
   const { colors } = useTheme();
   const group = trip.group || { members: [], expenses: [] };
   const { members, expenses } = group;
   const [name, setName] = useState('');
-  const [form, setForm] = useState({ concept: '', amount: '', paidBy: null, participants: [] });
+  const [payOpen, setPayOpen] = useState(false);
   const save = (patch) => update({ group: { ...group, ...patch } });
   const nameOf = (id) => members.find((m) => m.id === id)?.name || '?';
 
@@ -25,18 +25,13 @@ export default function GroupScreen({ trip, update }) {
     if (expenses.some((e) => e.paidBy === m.id || (e.participants || []).includes(m.id))) return notify(`${m.name} tiene gastos asociados. Elimina esos gastos primero.`);
     confirm(`¿Eliminar a ${m.name}?`, () => {
       save({ members: members.filter((x) => x.id !== m.id) });
-      setForm((f) => ({ ...f, paidBy: f.paidBy === m.id ? null : f.paidBy, participants: f.participants.filter((x) => x !== m.id) }));
     });
   };
-  const addExpense = () => {
-    const ids = members.map((m) => m.id);
-    const chosen = form.participants.filter((x) => ids.includes(x));
-    const participants = chosen.length ? chosen : ids;
-    const amount = r2(num(form.amount));
-    if (!(amount > 0)) return notify('Indica un importe mayor que 0');
-    if (!form.paidBy || !ids.includes(form.paidBy)) return notify('Elige quién ha pagado');
-    save({ expenses: [...expenses, { ...form, concept: form.concept.trim(), participants, amount, id: uid() }] });
-    setForm({ concept: '', amount: '', paidBy: form.paidBy, participants: [] });
+  const settle = (t) => {
+    const amount = r2(t.amount);
+    if (!(amount > 0)) return;
+    // Un pago es un gasto "de A para B": sube el saldo de quien paga y baja el de quien cobra
+    save({ expenses: [...expenses, { id: uid(), settlement: true, concept: 'Pago de deuda', amount, paidBy: t.from, participants: [t.to], date: todayISO() }] });
   };
   const { balances, transfers } = settleUp(members, expenses);
   const total = expenses.reduce((a, e) => a + num(e.amount), 0);
@@ -54,26 +49,6 @@ export default function GroupScreen({ trip, update }) {
         </View>
       </Card>
 
-      {members.length > 1 && (
-        <Card>
-          <H>Nuevo gasto compartido</H>
-          <Field label="Concepto" value={form.concept} onChangeText={(v) => setForm({ ...form, concept: v })} placeholder="Cena" />
-          <Field label="Importe (€)" value={form.amount} onChangeText={(v) => setForm({ ...form, amount: v })} keyboardType="decimal-pad" />
-          <Label>Pagado por</Label>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {members.map((m) => <Chip key={m.id} title={m.name} active={form.paidBy === m.id} onPress={() => setForm({ ...form, paidBy: m.id })} />)}
-          </View>
-          <Label>Para quién (vacío = todos)</Label>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {members.map((m) => {
-              const on = form.participants.includes(m.id);
-              return <Chip key={m.id} title={m.name} active={on} onPress={() => setForm({ ...form, participants: on ? form.participants.filter((x) => x !== m.id) : [...form.participants, m.id] })} />;
-            })}
-          </View>
-          <Btn title="Añadir gasto" onPress={addExpense} />
-        </Card>
-      )}
-
       <Card>
         <H>Saldos</H>
         <Muted>Total gastado por el grupo: {money(total)}</Muted>
@@ -83,10 +58,9 @@ export default function GroupScreen({ trip, update }) {
             <Text style={{ fontWeight: '700', color: r2(balances[m.id]) >= 0 ? colors.ok : colors.danger }}>{r2(balances[m.id]) >= 0 ? '+' : ''}{money(r2(balances[m.id]))}</Text>
           </View>
         ))}
-        <Text style={{ fontWeight: '700', marginTop: 10 }}>Cómo cuadrar las cuentas</Text>
-        {transfers.length ? transfers.map((t, i) => (
-          <Text key={i} style={{ paddingVertical: 3 }}>💸 <Text style={{ fontWeight: '700' }}>{nameOf(t.from)}</Text> paga {money(r2(t.amount))} a <Text style={{ fontWeight: '700' }}>{nameOf(t.to)}</Text></Text>
-        )) : <Muted>Todo cuadrado ✅</Muted>}
+        <View style={{ marginTop: 10 }}>
+          {transfers.length ? <Btn title="Pagar" onPress={() => setPayOpen(true)} /> : <Muted>Todo cuadrado ✅</Muted>}
+        </View>
       </Card>
 
       <Card>
@@ -94,14 +68,42 @@ export default function GroupScreen({ trip, update }) {
         {expenses.map((e) => (
           <View key={e.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderColor: colors.bg }}>
             <View style={{ flex: 1 }}>
-              <Text>{e.concept || 'Gasto'} · {money(e.amount)}</Text>
-              <Muted>Pagó {nameOf(e.paidBy)} · para {(e.participants || []).map(nameOf).join(', ')}</Muted>
+              {e.settlement ? (
+                <>
+                  <Text>💸 {nameOf(e.paidBy)} pagó {money(e.amount)} a {nameOf((e.participants || [])[0])}</Text>
+                  <Muted>Deuda saldada{e.date ? ` · ${fmtDMY(e.date)}` : ''}</Muted>
+                </>
+              ) : (
+                <>
+                  <Text>{e.concept || 'Gasto'} · {money(e.amount)}</Text>
+                  <Muted>Pagó {nameOf(e.paidBy)} · para {(e.participants || []).map(nameOf).join(', ')}</Muted>
+                </>
+              )}
             </View>
-            <Text style={{ color: colors.danger, padding: 6 }} onPress={() => confirm('¿Eliminar gasto?', () => save({ expenses: expenses.filter((x) => x.id !== e.id) }))}>✕</Text>
+            <Text style={{ color: colors.danger, padding: 6 }} onPress={() => confirm(e.settlement ? '¿Deshacer este pago?' : '¿Eliminar gasto?', () => save({ expenses: expenses.filter((x) => x.id !== e.id) }))}>✕</Text>
           </View>
         ))}
-        {!expenses.length && <Muted>Sin gastos compartidos.</Muted>}
+        {!expenses.length && <Muted>Sin movimientos.</Muted>}
       </Card>
+
+      <Modal visible={payOpen} transparent animationType="fade" onRequestClose={() => setPayOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 16 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 12, padding: 16, maxHeight: '85%' }}>
+            <H>Pagar deudas</H>
+            <ScrollView>
+              {transfers.length ? transfers.map((t) => (
+                <View key={`${t.from}-${t.to}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '700' }}>{nameOf(t.from)}</Text> debe {money(r2(t.amount))} a <Text style={{ fontWeight: '700' }}>{nameOf(t.to)}</Text>
+                  </Text>
+                  <Btn small title="Pagado" onPress={() => settle(t)} />
+                </View>
+              )) : <Muted>Todo cuadrado ✅</Muted>}
+            </ScrollView>
+            <View style={{ marginTop: 12 }}><Btn kind="outline" title="Cerrar" onPress={() => setPayOpen(false)} /></View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
