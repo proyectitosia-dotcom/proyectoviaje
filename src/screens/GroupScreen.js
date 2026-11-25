@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, View, Text } from 'react-native';
-import { Card, H, Field, Btn, Chip, Label, Muted, colors, confirm } from '../components/ui';
+import { Card, H, Field, Btn, Chip, Label, Muted, colors, confirm, notify } from '../components/ui';
 import { uid } from '../store';
 import { money, num, settleUp } from '../utils';
 
@@ -23,7 +23,8 @@ export default function GroupScreen({ trip, update }) {
   };
   const addExpense = () => {
     const participants = form.participants.length ? form.participants : members.map((m) => m.id);
-    if (!form.paidBy || !num(form.amount)) return;
+    if (!num(form.amount)) return notify('Indica el importe');
+    if (!form.paidBy) return notify('Elige quién ha pagado');
     save({ expenses: [...expenses, { ...form, participants, amount: num(form.amount), id: uid() }] });
     setForm({ concept: '', amount: '', paidBy: form.paidBy, participants: [] });
   };

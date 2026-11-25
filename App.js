@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Share, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Share, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Card, H, Field, Btn, Muted, colors, confirm } from './src/components/ui';
+import { Card, H, Field, Btn, Muted, colors, confirm, notify } from './src/components/ui';
 import { createTrip, tripExists, subscribeTrip, updateTrip, getMyTrips, addMyTrip, removeMyTrip, isShared } from './src/store';
 import RoutesScreen from './src/screens/RoutesScreen';
 import HotelsScreen from './src/screens/HotelsScreen';
@@ -18,6 +18,18 @@ const TABS = [
   ['grupo', 'Grupo', '👥', GroupScreen],
 ];
 
+async function shareTrip(name, code) {
+  const message = `¡Únete a mi viaje "${name}" en Proyecto Viaje! Código: ${code}`;
+  if (Platform.OS === 'web') {
+    try {
+      if (navigator.share) return await navigator.share({ text: message });
+      await navigator.clipboard.writeText(message);
+      return notify('Mensaje copiado al portapapeles', message);
+    } catch { return notify('Código del viaje', code); }
+  }
+  Share.share({ message });
+}
+
 function Home({ onOpen }) {
   const [trips, setTrips] = useState([]);
   const [name, setName] = useState('');
@@ -26,17 +38,17 @@ function Home({ onOpen }) {
   useEffect(() => { getMyTrips().then(setTrips); }, []);
 
   const create = async () => {
-    if (!name.trim()) return Alert.alert('Pon un nombre al viaje');
+    if (!name.trim()) return notify('Pon un nombre al viaje');
     try {
       const c = await createTrip(name.trim(), start.trim());
       await addMyTrip(c, name.trim());
       onOpen(c);
-    } catch (e) { Alert.alert('Error', String(e.message || e)); }
+    } catch (e) { notify('Error', String(e.message || e)); }
   };
   const join = async () => {
     const c = code.trim().toUpperCase();
     if (!c) return;
-    if (!(await tripExists(c))) return Alert.alert('No existe ningún viaje con ese código');
+    if (!(await tripExists(c))) return notify('No existe ningún viaje con ese código');
     onOpen(c);
   };
 
@@ -76,7 +88,7 @@ function Trip({ code, onExit }) {
   const [trip, setTrip] = useState(undefined);
   const [tab, setTab] = useState('ruta');
   useEffect(() => subscribeTrip(code, (t) => { setTrip(t); if (t) addMyTrip(code, t.name); }), [code]);
-  const update = (patch) => updateTrip(code, patch).catch((e) => Alert.alert('Error al guardar', String(e.message || e)));
+  const update = (patch) => updateTrip(code, patch).catch((e) => notify('Error al guardar', String(e.message || e)));
 
   if (trip === undefined) return <ActivityIndicator style={{ marginTop: 60 }} size="large" />;
   if (trip === null) return <View style={{ padding: 20 }}><Text>Viaje no encontrado.</Text><Btn title="Volver" onPress={onExit} /></View>;
@@ -90,7 +102,7 @@ function Trip({ code, onExit }) {
           <Text style={st.hTitle} numberOfLines={1}>{trip.name}</Text>
           <Text style={st.hSub}>Código: {code}{isShared ? ' · en tiempo real' : ' · local'}</Text>
         </View>
-        <Btn small title="Compartir" kind="outline" onPress={() => Share.share({ message: `¡Únete a mi viaje "${trip.name}" en Proyecto Viaje! Código: ${code}` })} />
+        <Btn small title="Compartir" kind="outline" onPress={() => shareTrip(trip.name, code)} />
       </View>
       <View style={{ flex: 1, backgroundColor: colors.bg }}><Screen trip={trip} update={update} code={code} /></View>
       <View style={st.tabs}>

@@ -24,6 +24,12 @@ npx expo start
 ```
 Escanea el QR con **Expo Go** (Android o iOS).
 
+### Ejecutar en el ordenador (navegador)
+```bash
+npm run web
+```
+Se abre en http://localhost:8081. Al guardar un archivo, la página se recarga sola con los cambios. Consejo: en Chrome pulsa F12 y activa la vista de móvil (Ctrl+Shift+M) para verla con tamaño de teléfono.
+
 ### Activar la compartición en tiempo real (Firebase, gratis)
 1. Crea un proyecto en https://console.firebase.google.com
 2. Pulsa *Añadir app → Web* y copia la configuración en `src/firebaseConfig.js`.

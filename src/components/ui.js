@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Linking, Alert, Platform } from 'react-native';
 
 export const colors = { primary: '#1E6FD9', bg: '#F3F6FA', card: '#FFFFFF', text: '#1B2430', muted: '#6B7785', danger: '#D64545', ok: '#2E9E5B', border: '#DDE3EA' };
 
@@ -26,7 +26,7 @@ export const Btn = ({ title, onPress, kind = 'primary', small, style }) => (
 );
 
 export const LinkText = ({ url, children }) => (
-  <Text style={s.link} onPress={() => Linking.openURL(url).catch(() => Alert.alert('No se pudo abrir el enlace'))}>{children}</Text>
+  <Text style={s.link} onPress={() => Linking.openURL(url).catch(() => notify('No se pudo abrir el enlace'))}>{children}</Text>
 );
 
 export const Chip = ({ title, active, onPress }) => (
@@ -35,7 +35,9 @@ export const Chip = ({ title, active, onPress }) => (
   </TouchableOpacity>
 );
 
-export const confirm = (msg, onYes) => Alert.alert('Confirmar', msg, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sí', style: 'destructive', onPress: onYes }]);
+// En web, Alert de React Native no hace nada: usamos los diálogos del navegador.
+export const notify = (title, msg) => (Platform.OS === 'web' ? window.alert(msg ? `${title}\n${msg}` : title) : Alert.alert(title, msg));
+export const confirm = (msg, onYes) => Platform.OS === 'web' ? (window.confirm(msg) && onYes()) : Alert.alert('Confirmar', msg, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Sí', style: 'destructive', onPress: onYes }]);
 
 const s = StyleSheet.create({
   card: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
