@@ -50,11 +50,30 @@ export function bookingSearchUrl({ city, checkIn, checkOut, adults, rooms }) {
 }
 
 // Cuadre de gastos: devuelve saldos y transferencias mínimas
+// Reparto de un gasto de grupo: cifras exactas (e.shares = { idMiembro: importe }) o a partes iguales entre los participantes
+export function shareMap(e) {
+  if (e && e.shares && typeof e.shares === 'object') {
+    const entries = Object.entries(e.shares).map(([id, v]) => [id, num(v)]).filter(([, v]) => v > 0);
+    if (entries.length) return Object.fromEntries(entries);
+  }
+  const ids = (e && e.participants) || [];
+  const total = num(e && e.amount);
+  return ids.length ? Object.fromEntries(ids.map((id) => [id, total / ids.length])) : {};
+}
+
 export function settleUp(members, expenses) {
   const bal = Object.fromEntries(members.map((m) => [m.id, 0]));
   for (const e of expenses) {
+    if (!(e.paidBy in bal)) continue;
+    if (e.shares && typeof e.shares === 'object') {
+      // Cifras exactas: cada participante debe lo suyo; quien pagó cobra la suma de esas partes
+      const parts = Object.entries(shareMap(e)).filter(([id]) => id in bal);
+      if (!parts.length) continue;
+      parts.forEach(([id, v]) => { bal[id] -= v; bal[e.paidBy] += v; });
+      continue;
+    }
     const parts = (e.participants || []).filter((p) => p in bal);
-    if (!parts.length || !(e.paidBy in bal)) continue;
+    if (!parts.length) continue;
     const share = num(e.amount) / parts.length;
     bal[e.paidBy] += num(e.amount);
     parts.forEach((p) => { bal[p] -= share; });

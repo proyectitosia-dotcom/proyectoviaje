@@ -86,7 +86,7 @@ export default function GroupScreen({ trip, update }) {
               ) : (
                 <>
                   <Text>{e.concept || 'Gasto'} · {money(e.amount)}</Text>
-                  <Muted>Pagó {nameOf(e.paidBy)} · para {(e.participants || []).map(nameOf).join(', ')}</Muted>
+                  <Muted>Pagó {nameOf(e.paidBy)} · para {e.shares ? Object.entries(e.shares).map(([id, v]) => `${nameOf(id)} ${money(r2(v))}`).join(', ') : (e.participants || []).map(nameOf).join(', ')}</Muted>
                 </>
               )}
             </View>
