@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Card, H, Field, Btn, Muted, Text, DateField, useStyles, confirm, notify } from './src/components/ui';
 import { ThemeProvider, useTheme } from './src/theme';
 import { UserProvider, useMe } from './src/user';
-import { normalizeTrip } from './src/utils';
 import { uid, createTrip, tripExists, subscribeTrip, updateTrip, getMyTrips, addMyTrip, removeMyTrip, isShared } from './src/store';
 import RoutesScreen from './src/screens/RoutesScreen';
 import HotelsScreen from './src/screens/HotelsScreen';
@@ -13,6 +12,9 @@ import CalendarScreen from './src/screens/CalendarScreen';
 import ExpensesScreen from './src/screens/ExpensesScreen';
 import GroupScreen from './src/screens/GroupScreen';
 import MapScreen from './src/screens/MapScreen';
+import TripDatesGate from './src/components/TripDatesGate';
+import { TripRangeProvider, hasValidRange } from './src/tripRange';
+import { fmtDMY, normalizeTrip } from './src/utils';
 import ErrorBoundary, { GlobalErrorBanner, installGlobalErrorHandlers } from './src/components/ErrorBoundary';
 
 // Captura errores fuera del dibujado (en móvil cerrarían la app) y los muestra como aviso
@@ -66,14 +68,13 @@ function Home({ onOpen }) {
   const st = useStyles(makeStyles);
   const [trips, setTrips] = useState([]);
   const [name, setName] = useState('');
-  const [start, setStart] = useState('');
   const [code, setCode] = useState('');
   useEffect(() => { getMyTrips().then(setTrips); }, []);
 
   const create = async () => {
     if (!name.trim()) return notify('Pon un nombre al viaje');
     try {
-      const c = await createTrip(name.trim(), start.trim());
+      const c = await createTrip(name.trim(), '');
       await addMyTrip(c, name.trim());
       onOpen(c);
     } catch (e) { notify('Error', String(e.message || e)); }
@@ -115,7 +116,6 @@ function Home({ onOpen }) {
       <Card>
         <H>Nuevo viaje</H>
         <Field label="Nombre" value={name} onChangeText={setName} placeholder="Verano en Italia" />
-        <DateField label="Fecha de inicio" value={start} onChange={setStart} />
         <Btn title="Crear viaje" onPress={create} />
       </Card>
       <Card>
@@ -132,6 +132,7 @@ function Trip({ code, onExit }) {
   const st = useStyles(makeStyles);
   const [trip, setTrip] = useState(undefined);
   const [tab, setTab] = useState('ruta');
+  const [editDates, setEditDates] = useState(false); // ajustes: cambiar las fechas del viaje
   useEffect(() => subscribeTrip(code, (t) => { setTrip(t); if (t) addMyTrip(code, t.name); }), [code]);
   const update = (patch) => updateTrip(code, patch).catch((e) => notify('Error al guardar', String(e.message || e)));
 
@@ -166,6 +167,13 @@ function Trip({ code, onExit }) {
 
   if (trip === undefined) return <ActivityIndicator style={{ marginTop: 60 }} size="large" />;
   if (trip === null) return <View style={{ padding: 20 }}><Text>Viaje no encontrado.</Text><Btn title="Volver" onPress={onExit} /></View>;
+  // Fechas obligatorias: sin rango válido no se muestra nada más
+  if (!hasValidRange(trip)) {
+    return <TripDatesGate tripName={trip.name} initialStart={trip.startDate} initialEnd={trip.endDate} onSave={(a, b) => update({ startDate: a, endDate: b })} onExit={onExit} />;
+  }
+  if (editDates) {
+    return <TripDatesGate tripName={trip.name} initialStart={trip.startDate} initialEnd={trip.endDate} onSave={(a, b) => { update({ startDate: a, endDate: b }); setEditDates(false); }} onCancel={() => setEditDates(false)} />;
+  }
   const Screen = (TABS.find((t) => t[0] === tab) || TABS[0])[3];
   const safeTrip = normalizeTrip(trip); // datos incompletos no deben romper las pantallas
 
@@ -176,12 +184,15 @@ function Trip({ code, onExit }) {
         <View style={{ flex: 1 }}>
           <Text style={st.hTitle} numberOfLines={1}>{trip.name}</Text>
           <Text style={st.hSub}>Código: {code}{isShared ? ' · en tiempo real' : ' · local'}</Text>
+          <Text style={st.hSub} onPress={() => setEditDates(true)}>📅 {fmtDMY(trip.startDate)} → {fmtDMY(trip.endDate)} · cambiar</Text>
         </View>
         <ThemeToggle />
         <Btn small title="Compartir" kind="outline" onPress={() => shareTrip(trip.name, code)} />
       </View>
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <ErrorBoundary key={tab} title="Esta pestaña ha fallado"><Screen trip={safeTrip} update={update} code={code} /></ErrorBoundary>
+        <TripRangeProvider start={trip.startDate} end={trip.endDate}>
+          <ErrorBoundary key={tab} title="Esta pestaña ha fallado"><Screen trip={safeTrip} update={update} code={code} /></ErrorBoundary>
+        </TripRangeProvider>
       </View>
       <View style={st.tabs}>
         {TABS.map(([k, label, icon]) => (

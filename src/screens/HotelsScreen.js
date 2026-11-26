@@ -95,7 +95,7 @@ export default function HotelsScreen({ trip, update }) {
           <Field label="Ciudad *" value={form.city} onChangeText={(v) => set('city', v)} placeholder="Roma" />
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><DateField label="Entrada" value={form.checkIn} onChange={(v) => set('checkIn', v)} /></View>
-            <View style={{ flex: 1 }}><DateField label="Salida" value={form.checkOut} onChange={(v) => set('checkOut', v)} /></View>
+            <View style={{ flex: 1 }}><DateField label="Salida" value={form.checkOut} min={form.checkIn || undefined} onChange={(v) => set("checkOut", v)} /></View>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><Field label="Personas/habitación" value={form.peoplePerRoom} onChangeText={(v) => set('peoplePerRoom', v)} keyboardType="number-pad" /></View>

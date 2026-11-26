@@ -3,6 +3,7 @@ import { View, Text as RNText, TextInput, TouchableOpacity, StyleSheet, Linking,
 import { useTheme } from '../theme';
 export { useTheme };
 import { fmtDMY, todayISO } from '../utils';
+import { useTripRange, inRange } from '../tripRange';
 
 // Estilos que dependen del tema (claro/oscuro)
 export const useStyles = (factory) => {
@@ -95,24 +96,33 @@ const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 
 const WEEK = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const pad = (n) => String(n).padStart(2, '0');
 
-export function DateField({ label, value, onChange, placeholder = 'dd-mm-aaaa' }) {
+// Selector de fecha reutilizable. Por defecto solo permite días DENTRO del rango del viaje (inicio-fin);
+// con la prop `unrestricted` se puede elegir cualquier día (solo para fijar el propio rango).
+// `min` / `max` (AAAA-MM-DD) permiten acotar aún más (p. ej. la salida no antes de la entrada).
+export function DateField({ label, value, onChange, placeholder = 'dd-mm-aaaa', unrestricted = false, min, max }) {
   const s = useStyles(makeStyles);
   const { colors } = useTheme();
+  const trip = useTripRange();
+  const lo = [unrestricted ? '' : trip.start, min || ''].filter(Boolean).sort().pop() || ''; // el más tardío de los mínimos
+  const hi = [unrestricted ? '' : trip.end, max || ''].filter(Boolean).sort()[0] || '';       // el más temprano de los máximos
+  const allowed = (d) => inRange(d, { start: lo, end: hi });
   const [open, setOpen] = useState(false);
-  const init = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : todayISO();
-  const [view, setView] = useState({ y: +init.slice(0, 4), m: +init.slice(5, 7) - 1 });
-
-  const show = () => {
-    const base = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : todayISO();
-    setView({ y: +base.slice(0, 4), m: +base.slice(5, 7) - 1 });
-    setOpen(true);
+  // Mes que se muestra al abrir: el de la fecha elegida o, si no hay, el más cercano al rango permitido
+  const startView = () => {
+    const today = todayISO();
+    let base = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : today;
+    if (!allowed(base)) base = lo && base < lo ? lo : hi || base;
+    return { y: +base.slice(0, 4), m: +base.slice(5, 7) - 1 };
   };
+  const [view, setView] = useState(startView);
+
+  const show = () => { setView(startView()); setOpen(true); };
   const shift = (dm) => setView(({ y, m }) => { const t = y * 12 + m + dm; return { y: Math.floor(t / 12), m: t % 12 }; });
   const first = (new Date(view.y, view.m, 1).getDay() + 6) % 7; // lunes = 0
   const total = new Date(view.y, view.m + 1, 0).getDate();
   const cells = [...Array(first).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)];
   const iso = (d) => `${view.y}-${pad(view.m + 1)}-${pad(d)}`;
-  const pick = (d) => { onChange(iso(d)); setOpen(false); };
+  const pick = (d) => { if (!allowed(iso(d))) return; onChange(iso(d)); setOpen(false); }; // los días fuera del rango no se pueden elegir
   const today = todayISO();
 
   return (
@@ -132,16 +142,17 @@ export function DateField({ label, value, onChange, placeholder = 'dd-mm-aaaa' }
               <Text style={s.calNav} onPress={() => shift(1)}>›</Text>
               <Text style={s.calNav} onPress={() => shift(12)}>»</Text>
             </View>
+            {(lo || hi) ? <Text style={{ textAlign: 'center', fontSize: 12, color: colors.muted, marginBottom: 4 }}>Solo se pueden elegir días entre {lo ? fmtDMY(lo) : '…'} y {hi ? fmtDMY(hi) : '…'}</Text> : null}
             <View style={s.calWeek}>{WEEK.map((w) => <Text key={w} style={s.calWd}>{w}</Text>)}</View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               {cells.map((d, i) => d === null ? <View key={`e${i}`} style={s.calCell} /> : (
-                <TouchableOpacity key={d} style={[s.calCell, iso(d) === today && s.calToday, iso(d) === value && s.calSel]} onPress={() => pick(d)}>
+                <TouchableOpacity key={d} disabled={!allowed(iso(d))} style={[s.calCell, iso(d) === today && s.calToday, iso(d) === value && s.calSel, !allowed(iso(d)) && { opacity: 0.25 }]} onPress={() => pick(d)}>
                   <Text style={[s.calDay, iso(d) === value && { color: colors.onPrimary, fontWeight: '700' }]}>{d}</Text>
                 </TouchableOpacity>
               ))}
             </View>
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-              <Btn small kind="outline" title="Hoy" style={{ flex: 1 }} onPress={() => { onChange(today); setOpen(false); }} />
+              {allowed(today) && <Btn small kind="outline" title="Hoy" style={{ flex: 1 }} onPress={() => { onChange(today); setOpen(false); }} />}
               <Btn small kind="outline" title="Borrar" style={{ flex: 1 }} onPress={() => { onChange(''); setOpen(false); }} />
               <Btn small title="Cerrar" style={{ flex: 1 }} onPress={() => setOpen(false)} />
             </View>

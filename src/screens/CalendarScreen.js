@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ScrollView, View, TouchableOpacity } from 'react-native';
 import { Card, H, Field, Btn, Chip, Label, Muted, LinkText, confirm, notify , Text, DateField, useTheme, useStyles } from '../components/ui';
 import { uid } from '../store';
-import { addDays, formatDate, fmtDM, googleMapsRouteUrl } from '../utils';
+import { addDays, formatDate, fmtDM, fmtDMY, googleMapsRouteUrl } from '../utils';
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -69,11 +69,7 @@ export default function CalendarScreen({ trip, update }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 14 }}>
       <Card>
-        <Label>Fecha de inicio del viaje (día 1)</Label>
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <View style={{ flex: 1 }}><DateField value={startDate} onChange={setStartDate} /></View>
-          <Btn small title="Guardar" onPress={saveStart} />
-        </View>
+        <Muted>📅 Viaje del {fmtDMY(trip.startDate)} al {fmtDMY(trip.endDate)} (se cambia desde la cabecera).</Muted>
         <View style={st.grid}>
           {days.map((d, i) => {
             const has = d.plan || d.events?.length || d.routeIds?.length;
