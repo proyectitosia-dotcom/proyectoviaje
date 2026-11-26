@@ -11,9 +11,11 @@ import HotelsScreen from './src/screens/HotelsScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import ExpensesScreen from './src/screens/ExpensesScreen';
 import GroupScreen from './src/screens/GroupScreen';
+import MapScreen from './src/screens/MapScreen';
 
 const TABS = [
   ['ruta', 'Ruta', '🗺️', RoutesScreen],
+  ['mapa', 'Mapa', '📍', MapScreen],
   ['hoteles', 'Hoteles', '🏨', HotelsScreen],
   ['calendario', 'Calendario', '📅', CalendarScreen],
   ['gastos', 'Gastos', '💶', ExpensesScreen],

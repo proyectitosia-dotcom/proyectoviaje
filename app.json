@@ -7,13 +7,30 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.proyectoviaje.app"
+      "bundleIdentifier": "com.proyectoviaje.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "comgooglemaps",
+          "waze"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Proyecto Viaje usa tu ubicación para mostrarte en el mapa y ayudarte a llegar a tus destinos."
+      }
     },
     "android": {
-      "package": "com.proyectoviaje.app"
+      "package": "com.proyectoviaje.app",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Proyecto Viaje usa tu ubicación para mostrarte en el mapa y ayudarte a llegar a tus destinos."
+        }
+      ]
     ]
   }
 }
