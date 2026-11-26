@@ -1,17 +1,16 @@
 // HTML de Leaflet que se carga dentro de la WebView (móvil) o de un iframe (web).
-// Sin claves de API: teselas de OpenStreetMap y Leaflet por CDN con versión fija.
+// Sin claves de API: teselas de OpenStreetMap; Leaflet va empaquetado en la app (sin CDN).
+import { LEAFLET_JS, LEAFLET_CSS } from '../vendor/leafletSource';
 //
 // Protocolo de mensajes (JSON):
 //   Mapa -> app:  { type:'ready' } | { type:'tap', lat, lng }
 //   App -> mapa:  { type:'user', lat, lng, accuracy } | { type:'center', lat, lng, zoom }
 //                 | { type:'marker', lat, lng } | { type:'clear' }
-export const LEAFLET_VERSION = '1.9.4';
-
 export const MAP_HTML = `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.css">
+<style>${LEAFLET_CSS}</style>
 <style>
   html, body, #map { height: 100%; margin: 0; padding: 0; }
   .pin { font-size: 30px; line-height: 30px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
@@ -20,8 +19,8 @@ export const MAP_HTML = `<!DOCTYPE html>
 </style>
 </head><body>
 <div id="map"></div>
-<div id="err">No se pudo cargar el mapa. Revisa tu conexión a internet.</div>
-<script src="https://unpkg.com/leaflet@${LEAFLET_VERSION}/dist/leaflet.js"></script>
+<div id="err">No se pudo cargar el mapa.</div>
+<script>${LEAFLET_JS}</script>
 <script>
 (function () {
   // Envía un mensaje a la app (WebView nativa o página padre en web)
