@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Linking } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Card, H, Field, Btn, Row, LinkText, Chip, Label, Muted, confirm, notify , Text, DateField } from '../components/ui';
 import { uid } from '../store';
 import { money, num, googleMapsRouteUrl, fmtDMY } from '../utils';
 import { useTripRange, inRange } from '../tripRange';
+import { isMapsLink, openExternal as openUrl, routeMapsUrl } from '../links';
 import PlaceSearch from '../components/PlaceSearch';
 import PlanView from '../components/PlanView';
 import { planRoute, summarize, errorMessage, SOURCES_URL, fmtTime as _fmtTime, fmtDur as _fmtDur } from '../transitous';
@@ -12,16 +13,6 @@ const TRANSPORTS = ['Avión', 'Tren', 'Autobús', 'Metro', 'Tranvía', 'Coche', 
 const MODES = [['transit', 'Transporte público'], ['driving', 'Coche'], ['walking', 'A pie'], ['bicycling', 'Bici']];
 // Formulario vacío de ruta. from/to son los lugares elegidos con Transitous (nombre, lat, lon, zona horaria).
 const makeEmpty = (date = '') => ({ name: '', originText: '', destText: '', from: null, to: null, stops: '', date, time: '', duration: '', cost: '', transports: [], lines: '', mode: 'transit', mapUrl: '', plan: null });
-// Enlaces de Google Maps admitidos para guardar como ubicación de la ruta
-const isMapsLink = (u) => /^https?:\/\/(www\.)?(google\.[a-z.]+\/maps|maps\.google\.[a-z.]+|goo\.gl\/maps|maps\.app\.goo\.gl)/i.test(u);
-// Abrir un enlace externo sin que un fallo cierre la app
-const openUrl = async (url) => { try { await Linking.openURL(url); } catch (e) { notify('No se pudo abrir el enlace'); } };
-// Enlace a Google Maps de una ruta: el guardado por el usuario o, si no hay, la ruta entre origen y destino
-export const routeMapsUrl = (r) => {
-  if (r.mapUrl) return r.mapUrl;
-  if (r.from && r.to) return `https://www.google.com/maps/dir/?api=1&origin=${r.from.lat},${r.from.lon}&destination=${r.to.lat},${r.to.lon}&travelmode=transit`;
-  return googleMapsRouteUrl(r.origin, r.destination, r.stops, r.mode);
-};
 
 const validDate = (d) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;

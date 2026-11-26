@@ -53,3 +53,9 @@ Booking.com no tiene una API pública abierta. Su API para socios (Demand API) e
 
 ## Seguridad
 Las reglas incluidas dejan leer y editar un viaje a cualquiera que conozca su código. Para más control, añade Firebase Authentication y limita el acceso a los miembros del viaje.
+
+## Rutas con Transitous (sin claves)
+La pestaña Ruta usa la API gratuita de [Transitous](https://transitous.org/api/) (MOTIS 2) para buscar lugares y consultar rutas de transporte público. No necesita clave. Su política de uso pide:
+- **Identificar la app** con un User-Agent con un contacto: rellena `CONTACT` en `src/transitous.js` (un e-mail o la web del proyecto).
+- **Código abierto y uso no comercial**, y poca carga: la app cachea los resultados y solo consulta al pulsar los botones.
+- **Atribución:** la pantalla enlaza https://transitous.org/sources/ y menciona OpenStreetMap.
