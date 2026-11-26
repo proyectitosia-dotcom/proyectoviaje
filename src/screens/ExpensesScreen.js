@@ -107,6 +107,7 @@ export default function ExpensesScreen({ trip, update }) {
   };
   const [sharing, setSharing] = useState(null); // { id, paidBy, participants } al compartir un gasto existente
   const [filter, setFilter] = useState(null);
+  const [catEdit, setCatEdit] = useState(null); // id del gasto cuyo tipo se está cambiando
   const nameOf = (id) => members.find((m) => m.id === id)?.name || '?';
   // Gasto de grupo vinculado a un gasto del viaje (si el gasto de grupo se borra desde Grupo, deja de estar vinculado)
   const linkOf = (e) => (e.groupId ? group.expenses.find((g) => g.id === e.groupId) : null);
@@ -144,6 +145,22 @@ export default function ExpensesScreen({ trip, update }) {
   };
   const unshare = (e) => update({ expenses: expenses.map((x) => { if (x.id !== e.id) return x; const { groupId: _g, ...rest } = x; return rest; }), group: { ...group, expenses: group.expenses.filter((g) => g.id !== e.groupId) } });
   const canEdit = (e) => !e.by || e.by === me.id;
+  const setCategory = (e, k) => {
+    if (!canEdit(e)) return notify('No puedes cambiarlo', `Este gasto lo añadió ${e.byName || 'otra persona'}; solo esa persona puede cambiar su tipo.`);
+    update({ expenses: expenses.map((x) => (x.id === e.id ? { ...x, category: k } : x)) });
+    setCatEdit(null);
+  };
+  // Enlace "Cambiar tipo" + selector de categorías de un gasto
+  const typeEditor = (e) => (
+    <View>
+      <Text style={{ color: colors.primary }} onPress={() => setCatEdit(catEdit === e.id ? null : e.id)}>🏷️ Cambiar tipo</Text>
+      {catEdit === e.id && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+          {CATEGORIES.map(([k, label, icon]) => <Chip key={k} title={`${icon} ${catLabel(label)}`} active={catKey(e) === k} onPress={() => setCategory(e, k)} />)}
+        </View>
+      )}
+    </View>
+  );
   const remove = (e) => !canEdit(e) ? notify('No puedes eliminarlo', `Este gasto lo añadió ${e.byName || 'otra persona'}; solo esa persona puede eliminarlo.`) : confirm(linkOf(e) ? '¿Eliminar gasto? También se quitará del gasto en grupo.' : '¿Eliminar gasto?', () => update({ expenses: expenses.filter((x) => x.id !== e.id), ...(linkOf(e) ? { group: { ...group, expenses: group.expenses.filter((g) => g.id !== e.groupId) } } : {}) }));
   const catLabel = (label) => label.replace(/^Costes? (de )?/, '').replace(/^./, (c) => c.toUpperCase());
   const sharedExpenses = expenses.filter((e) => linkOf(e));
@@ -174,16 +191,15 @@ export default function ExpensesScreen({ trip, update }) {
     <ScrollView contentContainerStyle={{ padding: 14 }}>
       <Card>
         <H>💰 Mi total gastado</H>
-        <Text style={{ fontSize: 30, fontWeight: '800', color: colors.primary, marginBottom: 6 }}>{money(total)}</Text>
-        <Row label="Mis gastos propios" value={money(personalTotal)} />
-        {(hotelsCost > 0 || routesCost > 0) && <Row label="🏨🚆 Hoteles y rutas del viaje" value={`+ ${money(hotelsCost + routesCost)}`} />}
-        <Row label="👥 Pagados por mí en grupo" value={`+ ${money(frontedTotal)}`} />
-        <Row label="💸 Me han devuelto" value={`− ${money(receivedTotal)}`} />
-        <Muted style={{ marginTop: 4 }}>Si pagas un gasto en grupo, se suma entero a tu total; cuando los demás te van pagando su parte, se resta. Los gastos en grupo se ven entre todos en la pestaña Grupo.</Muted>
+        <Text style={{ fontSize: 34, fontWeight: '800', color: colors.primary }}>{money(total)}</Text>
       </Card>
 
       <Card>
         <H>Mi resumen de gastos</H>
+        <Row label="Total de mis gastos" value={money(personalTotal + hotelsCost + routesCost)} />
+        <Row label="👥 Pagados por mí en grupo" value={`+ ${money(frontedTotal)}`} />
+        <Row label="💸 Dinero que me han pagado" value={`− ${money(receivedTotal)}`} />
+        <View style={{ borderTopWidth: 1, borderColor: colors.border, marginVertical: 8 }} />
         {CATEGORIES.map(([k, label, icon]) => (
           <View key={k}>
             <Row label={`${icon} ${label}${gross > 0 ? ` (${Math.round((byCat[k] / gross) * 100)}%)` : ''}`} value={money(byCat[k])} />
@@ -192,11 +208,6 @@ export default function ExpensesScreen({ trip, update }) {
             </View>
           </View>
         ))}
-        <View style={{ borderTopWidth: 1, borderColor: colors.border, marginTop: 6, paddingTop: 6 }}>
-          <Row label="Suma de gastos" value={money(gross)} />
-          {receivedTotal > 0 && <Row label="💸 Me han devuelto" value={`− ${money(receivedTotal)}`} />}
-          <Row label="Total" value={money(total)} />
-        </View>
       </Card>
 
       <Card>
@@ -269,6 +280,7 @@ export default function ExpensesScreen({ trip, update }) {
                     <Text style={{ color: colors.danger, paddingLeft: 12 }} onPress={() => remove(e)}>✕</Text>
                   </View>
                   <Muted>Pagó {nameOf(link.paidBy)} · para {(link.participants || []).map(nameOf).join(', ')}</Muted>
+                  {typeEditor(e)}
                 </View>
               );
             })}
@@ -308,6 +320,7 @@ export default function ExpensesScreen({ trip, update }) {
               ) : members.length > 1 && sharing?.id !== e.id ? (
                 <Text style={{ color: colors.primary }} onPress={() => setSharing({ id: e.id, paidBy: null, participants: [] })}>👥 Compartir con el grupo</Text>
               ) : null}
+              {typeEditor(e)}
               {!link && sharing?.id === e.id && (
                 <View>
                   <SharePicker members={members} value={sharing} onChange={(v) => setSharing({ ...sharing, ...v })} />

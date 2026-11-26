@@ -11,6 +11,11 @@ export default function GroupScreen({ trip, update }) {
   const [name, setName] = useState('');
   const [payOpen, setPayOpen] = useState(false);
   const save = (patch) => update({ group: { ...group, ...patch } });
+  // Al quitar un gasto del historial del grupo, también desaparece el gasto personal vinculado (el de quien lo hizo)
+  const removeGroupExpense = (e) => update({
+    group: { ...group, expenses: expenses.filter((x) => x.id !== e.id) },
+    ...(e.settlement ? {} : { expenses: (trip.expenses || []).filter((x) => x.groupId !== e.id) }),
+  });
   const nameOf = (id) => members.find((m) => m.id === id)?.name || '?';
 
   const r2 = (x) => { const v = Math.round((Number(x) || 0) * 100) / 100; return v === 0 ? 0 : v; };
@@ -85,7 +90,7 @@ export default function GroupScreen({ trip, update }) {
                 </>
               )}
             </View>
-            <Text style={{ color: colors.danger, padding: 6 }} onPress={() => confirm(e.settlement ? '¿Deshacer este pago?' : '¿Eliminar gasto?', () => save({ expenses: expenses.filter((x) => x.id !== e.id) }))}>✕</Text>
+            <Text style={{ color: colors.danger, padding: 6 }} onPress={() => confirm(e.settlement ? '¿Deshacer este pago?' : '¿Eliminar gasto?', () => removeGroupExpense(e))}>✕</Text>
           </View>
         ))}
         {!expenses.length && <Muted>Sin movimientos.</Muted>}
