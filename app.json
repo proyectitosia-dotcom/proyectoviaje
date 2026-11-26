@@ -31,6 +31,9 @@
           "locationWhenInUsePermission": "Proyecto Viaje usa tu ubicación para mostrarte en el mapa y ayudarte a llegar a tus destinos."
         }
       ]
-    ]
+    ],
+    "web": {
+      "lang": "es"
+    }
   }
 }

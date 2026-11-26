@@ -15,7 +15,7 @@ import MapScreen from './src/screens/MapScreen';
 import TripDatesGate from './src/components/TripDatesGate';
 import { TripRangeProvider, hasValidRange } from './src/tripRange';
 import { fmtDMY, normalizeTrip } from './src/utils';
-import ErrorBoundary, { GlobalErrorBanner, installGlobalErrorHandlers } from './src/components/ErrorBoundary';
+import ErrorBoundary, { GlobalErrorBanner, installGlobalErrorHandlers, describeError } from './src/components/ErrorBoundary';
 
 // Captura errores fuera del dibujado (en móvil cerrarían la app) y los muestra como aviso
 installGlobalErrorHandlers();
@@ -77,7 +77,7 @@ function Home({ onOpen }) {
       const c = await createTrip(name.trim(), '');
       await addMyTrip(c, name.trim());
       onOpen(c);
-    } catch (e) { notify('Error', String(e.message || e)); }
+    } catch (e) { notify('Error', describeError(e)); }
   };
   const join = async () => {
     const c = code.trim().toUpperCase();
@@ -134,7 +134,7 @@ function Trip({ code, onExit }) {
   const [tab, setTab] = useState('ruta');
   const [editDates, setEditDates] = useState(false); // ajustes: cambiar las fechas del viaje
   useEffect(() => subscribeTrip(code, (t) => { setTrip(t); if (t) addMyTrip(code, t.name); }), [code]);
-  const update = (patch) => updateTrip(code, patch).catch((e) => notify('Error al guardar', String(e.message || e)));
+  const update = (patch) => updateTrip(code, patch).catch((e) => notify('No se pudo guardar', describeError(e)));
 
   // Al entrar en un viaje, la persona se añade sola a los miembros del grupo (una vez por entrada;
   // se repite a los pocos segundos por si dos personas entran a la vez y una pisa a la otra).

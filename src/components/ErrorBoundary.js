@@ -6,12 +6,24 @@ import React from 'react';
 import { View, Platform } from 'react-native';
 import { Btn, Card, H, Muted, Text, useTheme } from './ui';
 
+// Explica un error en español (los mensajes técnicos de las librerías vienen en inglés)
+export function describeError(e) {
+  const raw = String((e && e.message) || e || '');
+  const l = `${raw} ${(e && e.code) || ''}`.toLowerCase();
+  if (/permission-denied|insufficient permissions/.test(l)) return 'No tienes permiso para hacer esto.';
+  if (/unavailable|network|failed to fetch|offline|timeout|timed out/.test(l)) return 'Parece que no hay conexión a internet.';
+  if (/not-found/.test(l)) return 'No se ha encontrado lo que se buscaba.';
+  if (/quota|resource-exhausted/.test(l)) return 'Se ha superado el límite del servicio. Inténtalo más tarde.';
+  if (/cannot read propert|undefined is not|is not a function|is not an object|null is not|is undefined/.test(l)) return 'Ha ocurrido un fallo inesperado en la app.';
+  return 'Ha ocurrido un error inesperado.';
+}
+
 // ---- Registro global de errores (para el aviso superior) ----
 const listeners = new Set();
 let lastError = null;
 
 export function reportError(e) {
-  const msg = String((e && e.message) || e || 'Error desconocido');
+  const msg = describeError(e);
   lastError = msg;
   // En desarrollo se sigue viendo en la consola / terminal de Expo
   // eslint-disable-next-line no-console
@@ -54,7 +66,7 @@ export function GlobalErrorBanner() {
   if (!msg) return null;
   return (
     <View style={{ backgroundColor: colors.danger, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <Text style={{ flex: 1, color: '#fff', fontSize: 13 }}>⚠️ Ha ocurrido un error: {msg}</Text>
+      <Text style={{ flex: 1, color: '#fff', fontSize: 13 }}>⚠️ {msg}</Text>
       <Text style={{ color: '#fff', fontWeight: '700', padding: 6 }} onPress={() => { lastError = null; setMsg(null); }}>Cerrar</Text>
     </View>
   );
@@ -67,7 +79,8 @@ function ErrorView({ error, onRetry, title }) {
       <Card>
         <H>{title || 'Algo ha fallado en esta pantalla'}</H>
         <Muted>La app sigue funcionando. Puedes reintentar o cambiar de pestaña.</Muted>
-        <Text selectable style={{ fontSize: 12, marginVertical: 10 }}>{String((error && error.message) || error)}</Text>
+        <Text style={{ marginVertical: 8 }}>{describeError(error)}</Text>
+        <Muted>Detalle técnico (por si hay que corregirlo): {String((error && error.message) || error)}</Muted>
         <Btn title="Reintentar" onPress={onRetry} />
       </Card>
     </View>

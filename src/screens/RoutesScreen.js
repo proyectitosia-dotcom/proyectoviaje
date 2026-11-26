@@ -7,6 +7,7 @@ import { useTripRange, inRange } from '../tripRange';
 import { isMapsLink, openExternal as openUrl, routeMapsUrl } from '../links';
 import PlaceSearch from '../components/PlaceSearch';
 import PlanView from '../components/PlanView';
+import RouteMap from '../components/RouteMap';
 import { planRoute, summarize, errorMessage, SOURCES_URL, fmtTime as _fmtTime, fmtDur as _fmtDur } from '../transitous';
 
 const TRANSPORTS = ['Avión', 'Tren', 'Autobús', 'Metro', 'Tranvía', 'Coche', 'Taxi', 'Barco', 'A pie', 'Bici'];
@@ -60,6 +61,7 @@ export default function RoutesScreen({ trip, update }) {
   const [busy, setBusy] = useState(false);        // consultando Transitous
   const [planError, setPlanError] = useState(''); // mensaje si la consulta falla
   const [refreshing, setRefreshing] = useState(null); // id de la ruta que se está actualizando
+  const [mapOpen, setMapOpen] = useState(null);       // id de la ruta cuyo mapa está abierto (solo uno a la vez)
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const allRoutes = arr(trip.routes).filter(Boolean);
   const [section, setSection] = useState('general'); // pestaña interna: ruta general / otras rutas
@@ -186,14 +188,14 @@ export default function RoutesScreen({ trip, update }) {
                     <TouchableOpacity key={`${o.start}-${i}`} onPress={() => { setPicked(i); applyOption(o, results.tz); }}
                       style={{ padding: 8, borderTopWidth: i ? 1 : 0, borderColor: colors.border, backgroundColor: picked === i ? colors.bg : 'transparent' }}>
                       <Text style={{ fontWeight: picked === i ? '700' : '600' }}>{picked === i ? '✔ ' : ''}{_fmtTime(o.start, results.tz)} → {_fmtTime(o.end, results.tz)} · {_fmtDur(o.durationMin)}</Text>
-                      <Muted>{o.transfers === 0 ? 'Sin transbordos' : `${o.transfers} transbordo${o.transfers > 1 ? 's' : ''}`}{sm.lines ? ` · ${sm.lines}` : ''}</Muted>
+                      <Muted>{o.transfers === 0 ? 'Sin transbordos' : `${o.transfers} transbordo${o.transfers > 1 ? 's' : ''}`}{sm.lines ? ` · Líneas: ${sm.lines}` : ' · A pie'}</Muted>
                     </TouchableOpacity>
                   );
                 })}
               </ScrollView>
             </View>
           )}
-          {form.plan ? <Card style={{ marginTop: 6, marginBottom: 4 }}><PlanView plan={form.plan} tz={form.plan.tz} /></Card> : null}
+          {form.plan ? <Card style={{ marginTop: 6, marginBottom: 4 }}><PlanView plan={form.plan} tz={form.plan.tz} /><RouteMap plan={form.plan} from={form.from} to={form.to} /></Card> : null}
 
           <Label>Datos manuales (se rellenan solos al consultar; edítalos si hace falta)</Label>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -226,6 +228,7 @@ export default function RoutesScreen({ trip, update }) {
           {r.plan && Array.isArray(r.plan.legs) ? (
             <View>
               <PlanView plan={r.plan} tz={r.plan.tz} />
+              {mapOpen === r.id ? <RouteMap plan={r.plan} from={r.from} to={r.to} /> : null}
               {r.plan.fetchedAt ? <Muted>Consultado el {new Date(r.plan.fetchedAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · Transitous</Muted> : null}
             </View>
           ) : (
@@ -239,6 +242,7 @@ export default function RoutesScreen({ trip, update }) {
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
             <Btn small title="Abrir en Google Maps" onPress={() => openUrl(routeMapsUrl(r))} style={{ flex: 1 }} />
             <Btn small kind="outline" title={refreshing === r.id ? 'Actualizando…' : '🔄 Actualizar'} onPress={() => refresh(r)} style={{ flex: 1 }} />
+            {r.plan && Array.isArray(r.plan.legs) ? <Btn small kind="outline" title={mapOpen === r.id ? '🗺️ Ocultar mapa' : '🗺️ Ver mapa'} onPress={() => setMapOpen(mapOpen === r.id ? null : r.id)} style={{ flex: 1 }} /> : null}
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Btn small title="Editar" kind="outline" onPress={() => edit(r)} style={{ flex: 1 }} />

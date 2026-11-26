@@ -87,16 +87,24 @@ async function countToday() {
 }
 
 // ---- Buscar un lugar por texto (geocoding de Transitous) ----
+// Nombre del país en español a partir de su código (ES -> España)
+const PAISES = { ES: 'España', FR: 'Francia', IT: 'Italia', PT: 'Portugal', DE: 'Alemania', GB: 'Reino Unido', NL: 'Países Bajos', BE: 'Bélgica', CH: 'Suiza', AT: 'Austria', IE: 'Irlanda', LU: 'Luxemburgo', DK: 'Dinamarca', SE: 'Suecia', NO: 'Noruega', FI: 'Finlandia', PL: 'Polonia', CZ: 'Chequia', HU: 'Hungría', GR: 'Grecia', HR: 'Croacia', SI: 'Eslovenia', SK: 'Eslovaquia', RO: 'Rumanía', BG: 'Bulgaria', US: 'Estados Unidos', CA: 'Canadá', MX: 'México', JP: 'Japón', AD: 'Andorra', MC: 'Mónaco' };
+const countryName = (code) => {
+  if (!code) return '';
+  const c = String(code).toUpperCase();
+  try { const n = new Intl.DisplayNames(['es'], { type: 'region' }).of(c); if (n && n !== c) return n; } catch (e) { /* sin Intl.DisplayNames */ }
+  return PAISES[c] || c;
+};
 const areaLabel = (p) => {
   const areas = Array.isArray(p.areas) ? p.areas : [];
   const city = (areas.find((a) => a.default) || areas.filter((a) => a.adminLevel <= 8).pop() || {}).name;
-  return [city, p.country].filter(Boolean).join(', ');
+  return [city, countryName(p.country)].filter(Boolean).join(', ');
 };
 
 export async function geocode(text) {
   const q = String(text || '').trim();
   if (q.length < 2) return [];
-  const key = `tr:geo:${q.toLowerCase()}`;
+  const key = `tr:geo2:${q.toLowerCase()}`; // geo2: la caché anterior tenía los países como código (ES)
   const cached = await cacheGet(key, GEO_TTL);
   if (cached) return cached;
   const data = await getJson(`${API_BASE}/v1/geocode?text=${encodeURIComponent(q)}&language=es`);
@@ -167,6 +175,63 @@ export function modeLabel(mode) {
 }
 export const modeIcon = (mode) => ({ 'A pie': '🚶', Bici: '🚲', Coche: '🚗', Avión: '✈️', Barco: '⛴️', Metro: '🚇', Tranvía: '🚊', Autobús: '🚌', Tren: '🚆' }[modeLabel(mode)] || '🚍');
 
+// ---- Trazado de cada tramo (para el mapa) ----
+// Transitous da la geometría como "polyline" codificada (precisión 6). Se decodifica y se simplifica
+// para guardar pocos puntos por tramo (el mapa es pequeño y no hace falta más detalle).
+function decodePolyline(str, precision = 6) {
+  const f = Math.pow(10, precision);
+  const out = [];
+  let i = 0, lat = 0, lon = 0;
+  while (i < str.length) {
+    let b, shift = 0, res = 0;
+    do { b = str.charCodeAt(i++) - 63; res |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20 && i < str.length);
+    lat += res & 1 ? ~(res >> 1) : res >> 1;
+    shift = 0; res = 0;
+    do { b = str.charCodeAt(i++) - 63; res |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20 && i < str.length);
+    lon += res & 1 ? ~(res >> 1) : res >> 1;
+    out.push([lat / f, lon / f]);
+  }
+  return out;
+}
+// Douglas-Peucker: se queda con los puntos que más importan
+function douglasPeucker(pts, eps) {
+  const last = pts.length - 1;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = 1; keep[last] = 1;
+  const stack = [[0, last]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    let max = 0, idx = -1;
+    const [ay, ax] = pts[a], [by, bx] = pts[b];
+    const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+    for (let i = a + 1; i < b; i++) {
+      const [py, px] = pts[i];
+      const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+      const d = Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+      if (d > max) { max = d; idx = i; }
+    }
+    if (max > eps && idx > 0) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+function simplifyTo(pts, maxPts) {
+  if (pts.length <= maxPts) return pts;
+  let eps = 1e-5;
+  let r = pts;
+  for (let i = 0; i < 14; i++) { r = douglasPeucker(pts, eps); if (r.length <= maxPts) return r; eps *= 2; }
+  return r.slice(0, maxPts);
+}
+// Lista plana [lat, lon, lat, lon, ...] con 5 decimales (unos 1 m): ocupa poco al guardarla
+function legGeo(g) {
+  try {
+    if (!g || typeof g.points !== 'string') return [];
+    const pts = simplifyTo(decodePolyline(g.points, Number.isFinite(g.precision) ? g.precision : 6), 80);
+    const flat = [];
+    pts.forEach(([la, lo]) => flat.push(Math.round(la * 1e5) / 1e5, Math.round(lo * 1e5) / 1e5));
+    return flat;
+  } catch (e) { return []; }
+}
+
 // ---- Consultar la ruta (plan) ----
 // Convierte un itinerario de la respuesta en un objeto pequeño y fácil de guardar
 function parseItinerary(it, from, to) {
@@ -182,6 +247,12 @@ function parseItinerary(it, from, to) {
     line: l.routeShortName || l.displayName || '',
     headsign: l.headsign || '',
     agency: l.agencyName || '',
+    // Coordenadas de salida y llegada del tramo y su trazado, para dibujarlo en el mapa
+    fromLat: l.from && Number.isFinite(l.from.lat) ? l.from.lat : null,
+    fromLon: l.from && Number.isFinite(l.from.lon) ? l.from.lon : null,
+    toLat: l.to && Number.isFinite(l.to.lat) ? l.to.lat : null,
+    toLon: l.to && Number.isFinite(l.to.lon) ? l.to.lon : null,
+    geo: legGeo(l.legGeometry),
   }));
   return { start: it.startTime || '', end: it.endTime || '', durationMin: Math.round((Number(it.duration) || 0) / 60), transfers: Number.isFinite(it.transfers) ? it.transfers : 0, legs };
 }

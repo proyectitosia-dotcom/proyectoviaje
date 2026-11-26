@@ -9,12 +9,15 @@ export default function PlanView({ plan, tz, compact }) {
   const { colors } = useTheme();
   if (!plan || !Array.isArray(plan.legs)) return null;
   const zone = tz || plan.tz || '';
+  const lines = plan.legs.filter((l) => l.mode !== 'WALK').map((l) => `${modeIcon(l.mode)} ${l.line || modeLabel(l.mode)}`).filter((x, i, a) => a.indexOf(x) === i);
   return (
     <View style={{ marginVertical: 4 }}>
       <Text style={{ fontWeight: '700', fontSize: 16 }}>
         {fmtTime(plan.start, zone)} → {fmtTime(plan.end, zone)} · {fmtDur(plan.durationMin)}
       </Text>
       <Muted>{plan.transfers === 0 ? 'Sin transbordos' : plan.transfers === 1 ? '1 transbordo' : `${plan.transfers} transbordos`}</Muted>
+      {/* Nombre de las líneas que se van a usar */}
+      {lines.length > 0 ? <Text style={{ fontWeight: '600', marginTop: 4 }}>Líneas: {lines.join('  ·  ')}</Text> : null}
       {plan.legs.map((l, i) => {
         const walk = l.mode === 'WALK';
         return (
