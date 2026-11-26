@@ -187,29 +187,38 @@ function parseItinerary(it, from, to) {
 }
 
 /**
- * Pide hasta 3 itinerarios de transporte público.
- * from / to: { name, lat, lon, tz? }; date "AAAA-MM-DD" y time "HH:MM" en la hora local de la salida.
+ * Consulta rutas de transporte público.
+ * from / to: { name, lat, lon, tz? }; date "AAAA-MM-DD".
+ * time "HH:MM" (hora local de la salida): opcional.
+ *   - Con hora: hasta 3 opciones a partir de esa hora.
+ *   - Sin hora: TODAS las salidas de ese día (de las 00:00 a las 24:00, hora local), ordenadas por salida.
  * force: salta la caché (botón Actualizar).
- * Devuelve { options: [itinerario...], tz }. Lanza TransitousError si algo falla.
+ * Devuelve { options: [itinerario...], tz, day }. Lanza TransitousError si algo falla.
  */
 export async function planRoute({ from, to, date, time, force = false }) {
   const tz = from.tz || '';
-  const when = localToUtcIso(date, time, tz);
+  const day = !time; // sin hora: todo el día
+  const when = localToUtcIso(date, time || '00:00', tz);
   const f = `${from.lat.toFixed(5)},${from.lon.toFixed(5)}`;
   const t = `${to.lat.toFixed(5)},${to.lon.toFixed(5)}`;
-  const key = `tr:plan:${f}|${t}|${when}`;
+  const key = `tr:plan:${f}|${t}|${when}|${day ? 'day' : 'n'}`;
   if (!force) {
     const cached = await cacheGet(key, PLAN_TTL);
-    if (cached) return { options: cached, tz };
+    if (cached) return { options: cached, tz, day };
   }
   await countToday();
-  const data = await getJson(`${API_BASE}/v5/plan?fromPlace=${f}&toPlace=${t}&time=${encodeURIComponent(when)}&numItineraries=3&language=es`, 25000);
+  // Una sola petición: con "searchWindow" de 24 h Transitous devuelve todas las salidas del día
+  const extra = day ? 'searchWindow=86400' : 'numItineraries=3';
+  const data = await getJson(`${API_BASE}/v5/plan?fromPlace=${f}&toPlace=${t}&time=${encodeURIComponent(when)}&${extra}&language=es`, day ? 40000 : 25000);
   const its = data && Array.isArray(data.itineraries) ? data.itineraries : null;
   if (!its) throw new TransitousError('format', 'Sin itinerarios');
-  const options = its.map((it) => parseItinerary(it, from, to)).filter((o) => o.legs.length);
+  const end = new Date(when).getTime() + 86400000;
+  let options = its.map((it) => parseItinerary(it, from, to)).filter((o) => o.legs.length);
+  if (day) options = options.filter((o) => { const st = new Date(o.start).getTime(); return st >= new Date(when).getTime() && st < end; }); // solo salidas de ese día
+  options.sort((a, b) => new Date(a.start) - new Date(b.start));
   if (!options.length) throw new TransitousError('empty', 'Sin rutas');
   await cacheSet(key, options);
-  return { options, tz };
+  return { options, tz, day };
 }
 
 // Datos de la ruta que se rellenan a partir de un itinerario (duración, transportes y líneas)

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { Card, H, Field, Btn, Row, LinkText, Chip, Label, Muted, confirm, notify , Text, DateField } from '../components/ui';
+import { ScrollView, View, TouchableOpacity } from 'react-native';
+import { Card, H, Field, Btn, Row, LinkText, Chip, Label, Muted, confirm, notify , Text, DateField, useTheme } from '../components/ui';
 import { uid } from '../store';
 import { money, num, googleMapsRouteUrl, fmtDMY } from '../utils';
 import { useTripRange, inRange } from '../tripRange';
@@ -12,7 +12,7 @@ import { planRoute, summarize, errorMessage, SOURCES_URL, fmtTime as _fmtTime, f
 const TRANSPORTS = ['Avión', 'Tren', 'Autobús', 'Metro', 'Tranvía', 'Coche', 'Taxi', 'Barco', 'A pie', 'Bici'];
 const MODES = [['transit', 'Transporte público'], ['driving', 'Coche'], ['walking', 'A pie'], ['bicycling', 'Bici']];
 // Formulario vacío de ruta. from/to son los lugares elegidos con Transitous (nombre, lat, lon, zona horaria).
-const makeEmpty = (date = '') => ({ name: '', originText: '', destText: '', from: null, to: null, stops: '', date, time: '', duration: '', cost: '', transports: [], lines: '', mode: 'transit', mapUrl: '', plan: null });
+const makeEmpty = (date = '') => ({ name: '', originText: '', destText: '', from: null, to: null, stops: '', date, time: '', duration: '', cost: '', transports: [], lines: '', mode: 'transit', mapUrl: '', plan: null, section: 'general' });
 
 const validDate = (d) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
@@ -20,6 +20,9 @@ const validDate = (d) => {
   const dt = new Date(Date.UTC(y, m - 1, day));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === day;
 };
+// Secciones de la pestaña: la ruta general (entra en el enlace de la ruta completa de Google Maps) y otras rutas (no entra)
+const SECTIONS = [['general', 'Ruta general'], ['otras', 'Otras rutas']];
+const sectionOf = (r) => (r && r.section === 'otras' ? 'otras' : 'general');
 const validTime = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 const MAX_WP = 9;
 // Datos antiguos o incompletos: nunca asumir que un campo existe o es del tipo esperado
@@ -50,6 +53,7 @@ const fmtTimeShort = (o, tz) => `${_fmtTime(o.start, tz)} · ${_fmtDur(o.duratio
 
 export default function RoutesScreen({ trip, update }) {
   const range = useTripRange();
+  const { colors } = useTheme();
   const [form, setForm] = useState(null);
   const [results, setResults] = useState(null);   // itinerarios devueltos por Transitous al consultar
   const [picked, setPicked] = useState(0);        // opción elegida (0, 1 o 2)
@@ -57,7 +61,9 @@ export default function RoutesScreen({ trip, update }) {
   const [planError, setPlanError] = useState(''); // mensaje si la consulta falla
   const [refreshing, setRefreshing] = useState(null); // id de la ruta que se está actualizando
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const routes = arr(trip.routes).filter(Boolean);
+  const allRoutes = arr(trip.routes).filter(Boolean);
+  const [section, setSection] = useState('general'); // pestaña interna: ruta general / otras rutas
+  const routes = allRoutes.filter((r) => sectionOf(r) === section); // las de la sección abierta
 
   const openForm = (f) => { setForm(f); setResults(null); setPicked(0); setPlanError(''); };
   const closeForm = () => { setForm(null); setResults(null); setPlanError(''); };
@@ -70,11 +76,12 @@ export default function RoutesScreen({ trip, update }) {
     if (busy) return;
     if (!form.from || !form.to) return notify('Faltan lugares', 'Busca y elige el origen y el destino con "Buscar lugar".');
     if (!validDate(txt(form.date))) return notify('Falta la fecha', 'Elige la fecha de salida en el calendario.');
-    if (!validTime(txt(form.time))) return notify('Falta la hora', 'Escribe la hora de salida en formato HH:MM, por ejemplo 08:30.');
+    // La hora es opcional: sin hora se muestran todas las salidas de ese día
+    if (txt(form.time) && !validTime(txt(form.time))) return notify('Hora no válida', 'Usa el formato HH:MM de 24 horas, por ejemplo 08:30, o déjala vacía para ver todas las salidas del día.');
     setBusy(true); setPlanError('');
     try {
-      const { options, tz } = await planRoute({ from: form.from, to: form.to, date: txt(form.date), time: txt(form.time) });
-      setResults({ options, tz }); setPicked(0);
+      const { options, tz, day } = await planRoute({ from: form.from, to: form.to, date: txt(form.date), time: txt(form.time) });
+      setResults({ options, tz, day }); setPicked(0);
       applyOption(options[0], tz);
     } catch (e) {
       setResults(null);
@@ -96,42 +103,49 @@ export default function RoutesScreen({ trip, update }) {
     const mapUrl = txt(form.mapUrl);
     if (mapUrl && !isMapsLink(mapUrl)) return notify('Enlace no válido', 'Pega un enlace de Google Maps (https://www.google.com/maps/... o https://maps.app.goo.gl/...).');
     const { originText, destText, ...rest } = form;
-    const r = { ...rest, origin, destination, date, time, mapUrl, stops: txt(form.stops).split(',').map((x) => x.trim()).filter(Boolean), cost, duration: txt(form.duration), lines: txt(form.lines) };
-    const list = form.id ? routes.map((x) => (x.id === form.id ? r : x)) : [...routes, { ...r, id: uid() }];
+    const r = { ...rest, section: sectionOf(form), origin, destination, date, time, mapUrl, stops: txt(form.stops).split(',').map((x) => x.trim()).filter(Boolean), cost, duration: txt(form.duration), lines: txt(form.lines) };
+    const list = form.id ? allRoutes.map((x) => (x.id === form.id ? r : x)) : [...allRoutes, { ...r, id: uid() }];
     list.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
     update({ routes: list });
     closeForm();
   };
-  const edit = (r) => openForm({ ...makeEmpty(), ...r, originText: txt(r.origin), destText: txt(r.destination), from: r.from || null, to: r.to || null, date: txt(r.date), time: txt(r.time), duration: txt(r.duration), lines: txt(r.lines), mapUrl: txt(r.mapUrl), stops: arr(r.stops).join(', '), transports: arr(r.transports), cost: String(r.cost ?? ''), plan: r.plan || null });
-  const remove = (r) => confirm('¿Eliminar esta ruta?', () => update({ routes: routes.filter((x) => x.id !== r.id) }));
+  const edit = (r) => openForm({ ...makeEmpty(), ...r, originText: txt(r.origin), destText: txt(r.destination), from: r.from || null, to: r.to || null, date: txt(r.date), time: txt(r.time), duration: txt(r.duration), lines: txt(r.lines), mapUrl: txt(r.mapUrl), stops: arr(r.stops).join(', '), transports: arr(r.transports), cost: String(r.cost ?? ''), plan: r.plan || null, section: sectionOf(r) });
+  const remove = (r) => confirm('¿Eliminar esta ruta?', () => update({ routes: allRoutes.filter((x) => x.id !== r.id) }));
 
   // Botón "Actualizar": vuelve a consultar Transitous con los datos guardados (máximo una vez por minuto)
   const refresh = async (r) => {
     if (refreshing) return;
-    if (!r.from || !r.to || !validDate(txt(r.date)) || !validTime(txt(r.time))) {
-      return notify('No se puede actualizar', 'Esta ruta no tiene lugares buscados con Transitous, fecha y hora. Edítala y pulsa "Consultar ruta".');
+    if (!r.from || !r.to || !validDate(txt(r.date)) || (txt(r.time) && !validTime(txt(r.time)))) {
+      return notify('No se puede actualizar', 'Esta ruta no tiene lugares buscados con Transitous y una fecha. Edítala y pulsa "Consultar ruta".');
     }
     if (r.plan && r.plan.fetchedAt && Date.now() - r.plan.fetchedAt < 60000) return notify('Acabas de consultarla', 'Espera un minuto antes de actualizar otra vez.');
     setRefreshing(r.id);
     try {
       const { options, tz } = await planRoute({ from: r.from, to: r.to, date: r.date, time: r.time, force: true });
-      const opt = options[0];
-      update({ routes: routes.map((x) => (x.id === r.id ? { ...x, plan: { ...opt, tz, fetchedAt: Date.now() }, ...summarize(opt) } : x)) });
+      // Sin hora, se conserva la misma salida elegida si sigue existiendo; si no, la primera
+      const opt = (r.plan && options.find((o) => o.start === r.plan.start)) || options[0];
+      update({ routes: allRoutes.map((x) => (x.id === r.id ? { ...x, plan: { ...opt, tz, fetchedAt: Date.now() }, ...summarize(opt) } : x)) });
     } catch (e) {
       notify('No se pudo actualizar', `${errorMessage(e)} Se mantienen los datos guardados.`);
     } finally { setRefreshing(null); }
   };
 
-  const full = routes.length > 1 ? fullRoute(routes) : null;
+  const full = section === 'general' && routes.length > 1 ? fullRoute(routes) : null;
   const total = routes.reduce((a, r) => a + num(r.cost), 0);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 14 }}>
+      {/* Dos apartados: la ruta general y otras rutas (estas últimas NO se añaden a la ruta general de Google Maps) */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {SECTIONS.map(([k, label]) => (
+          <Chip key={k} title={`${label} (${allRoutes.filter((r) => sectionOf(r) === k).length})`} active={section === k} onPress={() => { if (!form) setSection(k); }} />
+        ))}
+      </View>
       <Card>
-        <H>Ruta general del viaje</H>
+        <H>{section === 'general' ? 'Ruta general del viaje' : 'Otras rutas'}</H>
         <Row label="Trayectos" value={routes.length} />
-        <Row label="Coste total transporte" value={money(total)} />
-        {full && (
+        <Row label="Coste total" value={money(total)} />
+        {section === 'general' && full && (
           <>
             <LinkText url={googleMapsRouteUrl(full.origin, full.destination, full.all.slice(0, MAX_WP), 'driving')}>
               Ver ruta completa en Google Maps
@@ -141,25 +155,42 @@ export default function RoutesScreen({ trip, update }) {
             )}
           </>
         )}
-        {!form && <Btn title="+ Añadir trayecto" onPress={() => openForm(makeEmpty(range.start))} />}
+        {section === 'otras' && <Muted>Estas rutas son aparte: no se añaden a la ruta completa de Google Maps de la ruta general. Cada una tiene su propio botón «Abrir en Google Maps».</Muted>}
+        {!form && <Btn title="+ Añadir trayecto" onPress={() => openForm({ ...makeEmpty(range.start), section })} />}
       </Card>
 
       {form && (
         <Card>
           <H>{form.id ? 'Editar trayecto' : 'Nuevo trayecto'}</H>
+          <Label>Apartado</Label>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {SECTIONS.map(([k, label]) => <Chip key={k} title={label} active={sectionOf(form) === k} onPress={() => set('section', k)} />)}
+          </View>
           <Field label="Nombre (opcional)" value={form.name} onChangeText={(v) => set('name', v)} placeholder="Ej. Madrid → Barcelona" />
           <PlaceSearch label="Origen *" text={form.originText} onText={(v) => set('originText', v)} place={form.from} onPick={(p) => { set('from', p); if (results) setResults(null); }} />
           <PlaceSearch label="Destino *" text={form.destText} onText={(v) => set('destText', v)} place={form.to} onPick={(p) => { set('to', p); if (results) setResults(null); }} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><DateField label="Fecha de salida" value={form.date} onChange={(v) => set('date', v)} /></View>
-            <View style={{ flex: 1 }}><Field label="Hora salida" value={form.time} onChangeText={(v) => set('time', v)} placeholder="08:30" keyboardType="numbers-and-punctuation" /></View>
+            <View style={{ flex: 1 }}><Field label="Hora salida (opcional)" value={form.time} onChangeText={(v) => set('time', v)} placeholder="Sin hora: todo el día" keyboardType="numbers-and-punctuation" /></View>
           </View>
           <Btn kind="ok" title={busy ? 'Consultando…' : '🚆 Consultar ruta (Transitous)'} onPress={consult} />
           {planError ? <Muted>{planError}</Muted> : null}
 
-          {results && results.options.length > 1 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
-              {results.options.map((o, i) => <Chip key={i} title={`Opción ${i + 1} · ${fmtTimeShort(o, results.tz)}`} active={picked === i} onPress={() => { setPicked(i); applyOption(o, results.tz); }} />)}
+          {results && results.options.length > 0 && (
+            <View style={{ marginTop: 6 }}>
+              <Label>{results.day ? `Todas las salidas de ese día (${results.options.length}). Elige una:` : 'Elige una opción:'}</Label>
+              <ScrollView nestedScrollEnabled style={{ maxHeight: 300, borderWidth: 1, borderColor: colors.border, borderRadius: 8 }}>
+                {results.options.map((o, i) => {
+                  const sm = summarize(o);
+                  return (
+                    <TouchableOpacity key={`${o.start}-${i}`} onPress={() => { setPicked(i); applyOption(o, results.tz); }}
+                      style={{ padding: 8, borderTopWidth: i ? 1 : 0, borderColor: colors.border, backgroundColor: picked === i ? colors.bg : 'transparent' }}>
+                      <Text style={{ fontWeight: picked === i ? '700' : '600' }}>{picked === i ? '✔ ' : ''}{_fmtTime(o.start, results.tz)} → {_fmtTime(o.end, results.tz)} · {_fmtDur(o.durationMin)}</Text>
+                      <Muted>{o.transfers === 0 ? 'Sin transbordos' : `${o.transfers} transbordo${o.transfers > 1 ? 's' : ''}`}{sm.lines ? ` · ${sm.lines}` : ''}</Muted>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
           {form.plan ? <Card style={{ marginTop: 6, marginBottom: 4 }}><PlanView plan={form.plan} tz={form.plan.tz} /></Card> : null}
