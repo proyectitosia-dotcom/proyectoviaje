@@ -30,9 +30,12 @@ export function formatDate(dateStr) {
 const enc = encodeURIComponent;
 
 // Google Maps con ruta y paradas ya creada
-export function googleMapsRouteUrl(origin, destination, stops = [], mode = 'transit') {
-  let url = `https://www.google.com/maps/dir/?api=1&origin=${enc(origin)}&destination=${enc(destination)}&travelmode=${mode}`;
-  const wp = stops.filter(Boolean);
+export function googleMapsRouteUrl(origin, destination, stops, mode) {
+  // Robusto con datos incompletos: stops puede ser null/undefined/texto y mode puede faltar
+  const modes = ['transit', 'driving', 'walking', 'bicycling'];
+  const travel = modes.includes(mode) ? mode : 'transit';
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${enc(origin || '')}&destination=${enc(destination || '')}&travelmode=${travel}`;
+  const wp = (Array.isArray(stops) ? stops : []).filter(Boolean);
   if (wp.length) url += `&waypoints=${enc(wp.join('|'))}`;
   return url;
 }
@@ -101,3 +104,20 @@ export function settleUp(members, expenses) {
 export const fmtDMY = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}` : iso || '');
 export const fmtDM = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? `${iso.slice(8, 10)}-${iso.slice(5, 7)}` : '');
 export const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+// Normaliza un viaje leído de la base de datos: las listas siempre son listas y los objetos, objetos.
+// Así datos antiguos, incompletos o con valores null no pueden romper ninguna pantalla.
+export function normalizeTrip(t) {
+  if (!t || typeof t !== 'object') return t;
+  const arr = (v) => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : []);
+  const g = t.group && typeof t.group === 'object' ? t.group : {};
+  return {
+    ...t,
+    routes: arr(t.routes),
+    hotels: arr(t.hotels),
+    days: arr(t.days),
+    expenses: arr(t.expenses),
+    fx: t.fx && typeof t.fx === 'object' ? t.fx : {},
+    group: { ...g, members: arr(g.members), expenses: arr(g.expenses) },
+  };
+}

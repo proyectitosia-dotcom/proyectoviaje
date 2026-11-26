@@ -12,7 +12,10 @@ export const wazeSearchUrl = (q) => `https://waze.com/ul?q=${encodeURIComponent(
 export const googleDirUrl = (lat, lng) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 export const wazeDirUrl = (lat, lng) => `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
 
-const openUrl = (url) => Linking.openURL(url).catch(() => notify('No se pudo abrir el enlace'));
+// Abre un enlace externo sin que un fallo (sin app, sin navegador, URL inválida) cierre la app
+const openUrl = async (url) => {
+  try { await Linking.openURL(url); } catch (e) { notify('No se pudo abrir el enlace'); }
+};
 
 export default function MapScreen() {
   const { colors } = useTheme();
@@ -27,49 +30,69 @@ export default function MapScreen() {
   const [locError, setLocError] = useState(null); // aviso si no hay ubicación
 
   // Enviar al mapa (o dejar en cola si aún no ha cargado)
+  const mounted = useRef(true);      // evita actuar sobre la pantalla ya cerrada (callbacks tardíos de la ubicación)
   const post = useCallback((m) => {
-    if (ready.current && map.current) map.current.post(m);
-    else pending.current.push(m);
+    try {
+      if (ready.current && map.current) map.current.post(m);
+      else pending.current.push(m);
+    } catch (e) { /* un fallo al hablar con el mapa no debe cerrar la app */ }
   }, []);
 
   const onMapMessage = useCallback((m) => {
+    if (!m || typeof m !== 'object') return;
     if (m.type === 'ready') {
       ready.current = true;
-      pending.current.forEach((x) => map.current && map.current.post(x));
-      pending.current = [];
-    } else if (m.type === 'tap') setDest({ lat: m.lat, lng: m.lng });
+      const queued = pending.current; pending.current = [];
+      queued.forEach((x) => { try { map.current && map.current.post(x); } catch (e) { /* ignorar */ } });
+    } else if (m.type === 'tap' && Number.isFinite(m.lat) && Number.isFinite(m.lng)) setDest({ lat: m.lat, lng: m.lng });
   }, []);
 
   // ---- Ubicación en tiempo real ----
   const sub = useRef(null);
+  const stopWatching = () => { try { if (sub.current) sub.current.remove(); } catch (e) { /* ignorar */ } sub.current = null; };
   const startLocation = useCallback(async () => {
     setLocError(null);
+    const fail = (msg) => { if (mounted.current) setLocError(msg); };
     try {
-      if (sub.current) { sub.current.remove(); sub.current = null; }
+      stopWatching();
+      // En el navegador sin geolocalización (p. ej. página sin HTTPS) no se puede seguir
+      if (Platform.OS === 'web' && !(typeof navigator !== 'undefined' && navigator.geolocation)) {
+        return fail('Este navegador no permite usar la ubicación (necesita HTTPS o localhost).');
+      }
       const perm = await Location.requestForegroundPermissionsAsync();
       if (perm.status !== 'granted') {
-        setLocError('Sin permiso de ubicación. Actívalo para ver tu posición en el mapa.');
-        return;
+        return fail('Sin permiso de ubicación. Actívalo para ver tu posición en el mapa.');
+      }
+      // GPS apagado en el móvil: avisar en lugar de fallar
+      if (Platform.OS !== 'web' && Location.hasServicesEnabledAsync && !(await Location.hasServicesEnabledAsync())) {
+        return fail('Tienes la ubicación (GPS) desactivada en el móvil. Actívala y pulsa Reintentar.');
       }
       let first = true;
-      sub.current = await Location.watchPositionAsync(
+      const subscription = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.Balanced, distanceInterval: 5, timeInterval: 3000 },
         (p) => {
-          const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
-          lastPos.current = pos;
-          post({ type: 'user', ...pos, accuracy: p.coords.accuracy });
-          if (first) { first = false; post({ type: 'center', ...pos, zoom: 15 }); } // centrar solo la primera vez
+          try {
+            if (!mounted.current || !p || !p.coords) return;
+            const pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+            lastPos.current = pos;
+            post({ type: 'user', ...pos, accuracy: p.coords.accuracy });
+            if (first) { first = false; post({ type: 'center', ...pos, zoom: 15 }); } // centrar solo la primera vez
+          } catch (e) { /* ignorar una lectura rara */ }
         },
-        () => setLocError('No se pudo obtener tu ubicación. Revisa que el GPS esté activado.')
+        () => fail('No se pudo obtener tu ubicación. Revisa que el GPS esté activado.')
       );
-    } catch {
-      setLocError('No se pudo obtener tu ubicación. Revisa que el GPS esté activado.');
+      // Si la pantalla se cerró mientras se pedía la ubicación, se cancela la suscripción
+      if (!mounted.current) { try { subscription.remove(); } catch (e) { /* ignorar */ } return; }
+      sub.current = subscription;
+    } catch (e) {
+      fail('No se pudo obtener tu ubicación. Revisa que el GPS esté activado.');
     }
   }, [post]);
 
   useEffect(() => {
+    mounted.current = true;
     startLocation();
-    return () => { if (sub.current) sub.current.remove(); };
+    return () => { mounted.current = false; stopWatching(); };
   }, [startLocation]);
 
   const goMe = () => {

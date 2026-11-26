@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Card, H, Field, Btn, Muted, Text, DateField, useStyles, confirm, notify } from './src/components/ui';
 import { ThemeProvider, useTheme } from './src/theme';
 import { UserProvider, useMe } from './src/user';
+import { normalizeTrip } from './src/utils';
 import { uid, createTrip, tripExists, subscribeTrip, updateTrip, getMyTrips, addMyTrip, removeMyTrip, isShared } from './src/store';
 import RoutesScreen from './src/screens/RoutesScreen';
 import HotelsScreen from './src/screens/HotelsScreen';
@@ -12,6 +13,10 @@ import CalendarScreen from './src/screens/CalendarScreen';
 import ExpensesScreen from './src/screens/ExpensesScreen';
 import GroupScreen from './src/screens/GroupScreen';
 import MapScreen from './src/screens/MapScreen';
+import ErrorBoundary, { GlobalErrorBanner, installGlobalErrorHandlers } from './src/components/ErrorBoundary';
+
+// Captura errores fuera del dibujado (en móvil cerrarían la app) y los muestra como aviso
+installGlobalErrorHandlers();
 
 const TABS = [
   ['ruta', 'Ruta', '🗺️', RoutesScreen],
@@ -161,7 +166,8 @@ function Trip({ code, onExit }) {
 
   if (trip === undefined) return <ActivityIndicator style={{ marginTop: 60 }} size="large" />;
   if (trip === null) return <View style={{ padding: 20 }}><Text>Viaje no encontrado.</Text><Btn title="Volver" onPress={onExit} /></View>;
-  const Screen = TABS.find((t) => t[0] === tab)[3];
+  const Screen = (TABS.find((t) => t[0] === tab) || TABS[0])[3];
+  const safeTrip = normalizeTrip(trip); // datos incompletos no deben romper las pantallas
 
   return (
     <View style={{ flex: 1 }}>
@@ -174,7 +180,9 @@ function Trip({ code, onExit }) {
         <ThemeToggle />
         <Btn small title="Compartir" kind="outline" onPress={() => shareTrip(trip.name, code)} />
       </View>
-      <View style={{ flex: 1, backgroundColor: colors.bg }}><Screen trip={trip} update={update} code={code} /></View>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <ErrorBoundary key={tab} title="Esta pestaña ha fallado"><Screen trip={safeTrip} update={update} code={code} /></ErrorBoundary>
+      </View>
       <View style={st.tabs}>
         {TABS.map(([k, label, icon]) => (
           <TouchableOpacity key={k} style={st.tab} onPress={() => setTab(k)}>
@@ -195,8 +203,11 @@ function Root() {
     <SafeAreaProvider>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.card }} edges={['top', 'bottom']}>
         <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+        <GlobalErrorBanner />
         <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          <ErrorBoundary title="La app ha tenido un problema">
           {!ready ? null : !me.name ? <NamePrompt /> : code ? <Trip code={code} onExit={() => setCode(null)} /> : <Home onOpen={setCode} />}
+          </ErrorBoundary>
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

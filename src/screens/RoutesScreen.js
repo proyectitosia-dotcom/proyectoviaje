@@ -16,6 +16,9 @@ const validDate = (d) => {
 };
 const validTime = (t) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 const MAX_WP = 9;
+// Datos antiguos o incompletos: nunca asumir que un campo existe o es del tipo esperado
+const arr = (v) => (Array.isArray(v) ? v : []);
+const txt = (v) => String(v ?? '').trim();
 
 // Puntos intermedios de la ruta completa: paradas y puntos de enlace entre trayectos
 function fullRoute(routes) {
@@ -27,7 +30,7 @@ function fullRoute(routes) {
       push(prev);
       if ((r.origin || '').trim() !== (prev || '').trim()) push(r.origin);
     }
-    (r.stops || []).forEach(push);
+    arr(r.stops).forEach(push);
   });
   const origin = routes[0].origin;
   const destination = routes[routes.length - 1].destination;
@@ -38,25 +41,25 @@ function fullRoute(routes) {
 export default function RoutesScreen({ trip, update }) {
   const [form, setForm] = useState(null);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const routes = trip.routes || [];
+  const routes = arr(trip.routes).filter(Boolean);
 
   const save = () => {
-    const origin = form.origin.trim();
-    const destination = form.destination.trim();
+    const origin = txt(form.origin);
+    const destination = txt(form.destination);
     if (!origin || !destination) return notify('Faltan datos', 'El origen y el destino son obligatorios.');
-    const date = form.date.trim();
-    const time = form.time.trim();
+    const date = txt(form.date);
+    const time = txt(form.time);
     if (date && !validDate(date)) return notify('Fecha no válida', 'Elige la fecha en el calendario.');
     if (time && !validTime(time)) return notify('Hora no válida', 'Usa el formato HH:MM de 24 horas, por ejemplo 08:30.');
     const cost = num(form.cost);
     if (cost < 0) return notify('Coste no válido', 'El coste no puede ser negativo.');
-    const r = { ...form, origin, destination, date, time, stops: form.stops.split(',').map((x) => x.trim()).filter(Boolean), cost };
+    const r = { ...form, origin, destination, date, time, stops: txt(form.stops).split(',').map((x) => x.trim()).filter(Boolean), cost };
     const list = form.id ? routes.map((x) => (x.id === form.id ? r : x)) : [...routes, { ...r, id: uid() }];
     list.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
     update({ routes: list });
     setForm(null);
   };
-  const edit = (r) => setForm({ ...r, stops: (r.stops || []).join(', '), cost: String(r.cost ?? '') });
+  const edit = (r) => setForm({ ...empty, ...r, date: txt(r.date), time: txt(r.time), duration: txt(r.duration), lines: txt(r.lines), stops: arr(r.stops).join(', '), transports: arr(r.transports), cost: String(r.cost ?? '') });
   const remove = (r) => confirm('¿Eliminar esta ruta?', () => update({ routes: routes.filter((x) => x.id !== r.id) }));
   const full = routes.length > 1 ? fullRoute(routes) : null;
   const total = routes.reduce((a, r) => a + num(r.cost), 0);
@@ -98,8 +101,8 @@ export default function RoutesScreen({ trip, update }) {
           <Label>Tipo de transporte</Label>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {TRANSPORTS.map((t) => (
-              <Chip key={t} title={t} active={(form.transports || []).includes(t)}
-                onPress={() => set('transports', (form.transports || []).includes(t) ? (form.transports || []).filter((x) => x !== t) : [...(form.transports || []), t])} />
+              <Chip key={t} title={t} active={arr(form.transports).includes(t)}
+                onPress={() => set('transports', arr(form.transports).includes(t) ? arr(form.transports).filter((x) => x !== t) : [...arr(form.transports), t])} />
             ))}
           </View>
           <Field label="Líneas utilizadas" value={form.lines} onChangeText={(v) => set('lines', v)} placeholder="AVE 03071, Metro L1, Bus 27" />
@@ -117,11 +120,11 @@ export default function RoutesScreen({ trip, update }) {
           <Text style={{ fontWeight: '700', fontSize: 16 }}>{i + 1}. {r.name || `${r.origin} → ${r.destination}`}</Text>
           <Muted>{r.date ? fmtDMY(r.date) : 'Sin fecha'}{r.time ? ` · ${r.time}` : ''}</Muted>
           <Row label="Origen" value={r.origin} />
-          {(r.stops || []).length > 0 && <Row label="Paradas" value={(r.stops || []).join(' → ')} />}
+          {arr(r.stops).length > 0 && <Row label="Paradas" value={arr(r.stops).join(' → ')} />}
           <Row label="Destino" value={r.destination} />
           <Row label="Duración" value={r.duration || '-'} />
           <Row label="Coste" value={money(r.cost)} />
-          <Row label="Transporte" value={(r.transports || []).join(', ') || '-'} />
+          <Row label="Transporte" value={arr(r.transports).join(', ') || '-'} />
           <Row label="Líneas" value={r.lines || '-'} />
           <LinkText url={googleMapsRouteUrl(r.origin, r.destination, r.stops, r.mode)}>Abrir ruta en Google Maps</LinkText>
           <View style={{ flexDirection: 'row', gap: 8 }}>
