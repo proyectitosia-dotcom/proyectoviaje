@@ -211,3 +211,96 @@ describe('HotelsScreen: divisa del precio por noche', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('HotelsScreen: al editar se conserva el cambio original', () => {
+  // Hotel guardado en USD con cambio 0.92; hoy el dólar vale 0.5
+  const enUsd = { ...hotel, pricePerNight: 92, rooms: 1, priceOrig: { amount: 100, currency: 'USD', rate: 0.92 } };
+  const hoy = { fx: { USD: 0.5 } };
+  const editar = () => fireEvent.press(screen.getByText('Editar'));
+  const guardar = () => fireEvent.press(screen.getByText('Guardar hotel'));
+  const campoPrecio = () => screen.UNSAFE_getAllByType(TextInput).filter((t) => t.props.keyboardType === 'decimal-pad')[0];
+  const hotelGuardado = (u) => u.mock.calls[0][0].hotels[0];
+
+  test('sin tocar importe ni divisa no se reconvierte (92 € y rate 0.92) y el gasto por persona no cambia', () => {
+    const update = montar({ ...hoy, hotels: [enUsd], expenses: [] });
+    editar(); guardar();
+    const h = hotelGuardado(update);
+    expect(h.pricePerNight).toBe(92);
+    expect(h.priceOrig).toEqual({ amount: 100, currency: 'USD', rate: 0.92 });
+    expect(update.mock.calls[0][0].expenses[0].amount).toBe(138);   // 92 € × 3 noches ÷ 2 personas
+  });
+
+  test('cambiar otro campo (nombre, hora) sigue conservando el cambio', () => {
+    const update = montar({ ...hoy, hotels: [enUsd], expenses: [] });
+    editar();
+    fireEvent.changeText(screen.getByDisplayValue('Hotel Sol'), 'Hotel Luna');
+    fireEvent.changeText(screen.getByDisplayValue('15:00'), '17:00');
+    guardar();
+    const h = hotelGuardado(update);
+    expect(h).toMatchObject({ name: 'Hotel Luna', checkInTime: '17:00', pricePerNight: 92 });
+    expect(h.priceOrig.rate).toBe(0.92);
+  });
+
+  test('la vista previa por persona también usa el cambio original (92 ÷ 2 = 46 €)', () => {
+    montar({ ...hoy, hotels: [enUsd], expenses: [] });
+    editar();
+    expect(screen.getByText(/≈ 46\.00 € por persona y noche/)).toBeTruthy();
+  });
+
+  test('si cambia el importe se recalcula con el cambio de hoy (200 USD × 0.5 = 100 €)', () => {
+    const update = montar({ ...hoy, hotels: [enUsd], expenses: [] });
+    editar();
+    fireEvent.changeText(campoPrecio(), '200');
+    guardar();
+    const h = hotelGuardado(update);
+    expect(h.pricePerNight).toBe(100);
+    expect(h.priceOrig).toEqual({ amount: 200, currency: 'USD', rate: 0.5 });
+  });
+
+  test('si cambia la divisa se recalcula con el cambio de hoy (100 GBP)', () => {
+    const update = montar({ fx: { USD: 0.5, GBP: 1.2 }, hotels: [enUsd], expenses: [] });
+    editar();
+    fireEvent.press(screen.getByText('GBP'));
+    guardar();
+    const h = hotelGuardado(update);
+    expect(h.pricePerNight).toBe(120);
+    expect(h.priceOrig).toEqual({ amount: 100, currency: 'GBP', rate: 1.2 });
+  });
+
+  test('cambiar el importe y volver al original conserva el cambio original', () => {
+    const update = montar({ ...hoy, hotels: [enUsd], expenses: [] });
+    editar();
+    fireEvent.changeText(campoPrecio(), '200');
+    fireEvent.changeText(campoPrecio(), '100');
+    guardar();
+    expect(hotelGuardado(update).priceOrig.rate).toBe(0.92);
+  });
+
+  test('pasar a euros descarta el original y deja el importe escrito', () => {
+    const update = montar({ ...hoy, hotels: [enUsd], expenses: [] });
+    editar();
+    fireEvent.press(screen.getByText('EUR'));
+    guardar();
+    const h = hotelGuardado(update);
+    expect(h.pricePerNight).toBe(100);
+    expect('priceOrig' in h).toBe(false);
+  });
+
+  test('un hotel en euros se comporta como antes', () => {
+    const update = montar({ ...hoy, hotels: [hotel], expenses: [] });
+    editar(); guardar();
+    const h = hotelGuardado(update);
+    expect(h.pricePerNight).toBe(100);
+    expect('priceOrig' in h).toBe(false);
+  });
+
+  test('un hotel con precio en USD que antes estaba en euros sí se convierte con el cambio de hoy', () => {
+    const update = montar({ ...hoy, hotels: [hotel], expenses: [] });
+    editar();
+    fireEvent.press(screen.getByText('USD'));
+    guardar();
+    const h = hotelGuardado(update);
+    expect(h.pricePerNight).toBe(50);
+    expect(h.priceOrig).toEqual({ amount: 100, currency: 'USD', rate: 0.5 });
+  });
+});

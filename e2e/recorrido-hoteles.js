@@ -72,6 +72,16 @@ const { chromium } = require('playwright');
   check('al editar vuelve el importe original (100) en USD', (await p.locator('input[value="100"]').count()) >= 1 && (await p.innerText('body')).includes('Precio/noche por habitación (USD)'));
   await p.getByText('Cancelar', { exact: true }).click(); await p.waitForTimeout(300);
 
+  // El dólar baja a 0.5 en «Cambio de divisa»; al reeditar el hotel sin tocar importe ni divisa se conserva el cambio original (0.8)
+  await p.getByText('Gastos', { exact: true }).click(); await p.waitForTimeout(600);
+  await p.getByText('Abrir ▼').click(); await p.waitForTimeout(300);
+  const usd = await p.locator('input[value="0.8"]').elementHandle(); await usd.fill('0.5'); await usd.press('Enter'); await p.waitForTimeout(500);
+  check('el cambio del dólar queda en 0.5', (await p.locator('input[value="0.5"]').count()) === 1);
+  await p.getByText('Hoteles', { exact: true }).click(); await p.waitForTimeout(500);
+  await p.getByText('Editar', { exact: true }).click(); await p.waitForTimeout(400);
+  await p.getByText('Guardar hotel').click(); await p.waitForTimeout(700);
+  check('reeditar sin tocar importe ni divisa conserva «80.00 € (100 USD)»', (await p.innerText('body')).includes('80.00 € (100 USD)'));
+
   await p.getByText('Gastos', { exact: true }).click(); await p.waitForTimeout(800);
   body = await p.innerText('body');
   await p.screenshot({ path: require('path').join(require('os').tmpdir(), 'gastos.png') });
