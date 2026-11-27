@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ScrollView, View, Linking, Platform } from 'react-native';
-import { Card, H, Field, Btn, Row, LinkText, Muted, confirm, notify , Text, DateField } from '../components/ui';
+import { ScrollView, View, Linking, Platform, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Card, H, Field, Btn, Row, LinkText, Muted, confirm, notify , Text, DateField, useTheme } from '../components/ui';
 import { uid } from '../store';
 import BookingBrowser from '../components/BookingBrowser';
 import { money, num, addDays, datesBetween, formatDate, fmtDMY, bookingSearchUrl, googleMapsPlaceUrl } from '../utils';
@@ -13,6 +14,7 @@ const empty = { city: '', name: '', address: '', checkIn: '', checkOut: '', chec
 const mapsFor = (h) => (h.lat && h.lng ? `https://www.google.com/maps/search/?api=1&query=${h.lat},${h.lng}` : googleMapsPlaceUrl([h.name, h.address, h.city].filter(Boolean).join(' ')));
 
 export default function HotelsScreen({ trip, update }) {
+  const { colors } = useTheme();
   const [form, setForm] = useState(null);
   const [browserUrl, setBrowserUrl] = useState(null);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -86,11 +88,7 @@ export default function HotelsScreen({ trip, update }) {
     setForm(null);
   };
 
-  return (
-    <ScrollView contentContainerStyle={{ padding: 14 }}>
-      {!form && <Btn title="+ Añadir hotel" onPress={() => setForm(empty)} />}
-
-      {form && (
+  const formView = form ? (
         <Card>
           <H>{form.id ? 'Editar hotel' : 'Buscar y añadir hotel'}</H>
           <Field label="Ciudad *" value={form.city} onChangeText={(v) => set('city', v)} placeholder="Roma" />
@@ -115,7 +113,26 @@ export default function HotelsScreen({ trip, update }) {
           </View>
           <Btn title="Guardar hotel" onPress={save} />
           <Btn title="Cancelar" kind="outline" onPress={() => setForm(null)} />
+          <BookingBrowser visible={!!browserUrl} url={browserUrl} onClose={() => setBrowserUrl(null)} onPick={pickHotel} />
         </Card>
+  ) : null;
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 14 }}>
+      {!form && <Btn title="+ Añadir hotel" onPress={() => setForm(empty)} />}
+
+      {form && !form.id && formView}
+      {/* Al editar un hotel el formulario se abre en una ventana flotante que se cierra al guardar o cancelar */}
+      {form && form.id && (
+        <Modal visible animationType="slide" transparent onRequestClose={() => setForm(null)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' }}>
+            <SafeAreaView style={{ flex: 1, justifyContent: 'center' }}>
+              <View style={{ maxHeight: '92%', marginHorizontal: 10, borderRadius: 12, backgroundColor: colors.bg, overflow: 'hidden' }}>
+                <ScrollView contentContainerStyle={{ padding: 10 }} keyboardShouldPersistTaps="handled">{formView}</ScrollView>
+              </View>
+            </SafeAreaView>
+          </View>
+        </Modal>
       )}
 
       {hotels.map((h) => {
@@ -130,7 +147,7 @@ export default function HotelsScreen({ trip, update }) {
             <Text style={{ fontWeight: '700', fontSize: 16 }}>{h.name}</Text>
             <Muted>{h.city}{h.address ? ` · ${h.address}` : ''}</Muted>
             <Row label="Hora check-in" value={h.checkInTime || '-'} />
-            {h.checkIn && h.checkOut ? <Row label="Fechas" value={`${h.checkIn} → ${h.checkOut}`} /> : null}
+            {h.checkIn && h.checkOut ? <Row label="Fechas" value={`${fmtDMY(h.checkIn)} → ${fmtDMY(h.checkOut)}`} /> : null}
             <Row label="Personas por habitación" value={h.peoplePerRoom} />
             <Row label="Nº habitaciones" value={h.rooms} />
             <Row label="Precio por noche (habitación)" value={money(h.pricePerNight)} />
@@ -149,7 +166,6 @@ export default function HotelsScreen({ trip, update }) {
           </Card>
         );
       })}
-      <BookingBrowser visible={!!browserUrl} url={browserUrl} onClose={() => setBrowserUrl(null)} onPick={pickHotel} />
     </ScrollView>
   );
 }
