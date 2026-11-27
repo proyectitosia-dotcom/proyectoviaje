@@ -12,7 +12,7 @@
 
 ## 2. Órdenes y metodología del usuario (obligatorias)
 - Responder y escribir la interfaz **en español**; código ordenado con **comentarios en español**.
-- **Sin APIs de pago ni claves de API.** La única API externa permitida es **Transitous** (gratuita, sin clave), solo para Rutas.
+- **Sin APIs de pago ni claves de API.** La única API externa permitida es **Transitous** (gratuita, sin clave), solo para Rutas. **Excepción autorizada por el usuario (Gastos):** las cotizaciones de divisa se descargan de **Frankfurter (BCE)**, con respaldo **open.er-api.com** (ambas gratuitas y sin clave); decisión: mantenerlas.
 - No tocar archivos compartidos (`App.js`, `app.json`, `package.json`, `src/utils.js`, `src/components/ui.js`) ni de otros apartados sin avisar al usuario.
 - Cuando el usuario pide un plan y confirmación, no tocar nada hasta que confirme. Si dice «no hagas nada», no se hace nada.
 - Ser honesto en los resúmenes: decir qué se hizo, qué no se pudo probar y por qué.
@@ -47,6 +47,7 @@
 
 ## 6. Pendientes y avisos abiertos
 - Tests de pantalla de Gastos pendientes (los hace Tests).
+- Resuelto: el usuario decidió **mantener** la descarga automática de cambios (Frankfurter/BCE + open.er-api.com). Pendiente solo que el chat principal lo refleje en `Mainsave.md` (lista de APIs permitidas).
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
 - Refactor de divisas: selector y conversión a euros extraídos a `src/currency.js` + `src/components/CurrencyField.js` para reutilizarlos en Ruta y Hoteles (Gastos no cambia). Los helpers puros están en un archivo nuevo en vez de `utils.js` para no tocar el compartido.
