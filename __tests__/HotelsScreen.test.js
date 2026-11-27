@@ -1,7 +1,7 @@
 // Pantalla Hoteles: el gasto automático en Gastos es lo que paga UNA persona por la estancia.
 import React from 'react';
-import { Alert, Modal } from 'react-native';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { Alert, Modal, TextInput } from 'react-native';
+import { render, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import HotelsScreen from '../src/screens/HotelsScreen';
 
 const hotel = {
@@ -13,7 +13,7 @@ afterEach(() => jest.restoreAllMocks());
 
 const montar = (trip) => {
   const update = jest.fn();
-  render(<HotelsScreen trip={trip} update={update} />);
+  render(<HotelsScreen trip={{ fxAt: Date.now(), ...trip }} update={update} />);
   return update;
 };
 
@@ -120,5 +120,94 @@ describe('HotelsScreen: fechas y ventana flotante de edición', () => {
     fireEvent.press(screen.getByText('+ Añadir hotel'));
     fireEvent.press(screen.getByText('Guardar hotel'));
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe('HotelsScreen: divisa del precio por noche', () => {
+  const precio = () => screen.UNSAFE_getAllByType(TextInput).filter((t) => t.props.keyboardType === 'decimal-pad')[0];
+  const editarYGuardar = () => { fireEvent.press(screen.getByText('Editar')); };
+  const guardado = (update) => update.mock.calls[0][0].hotels[0];
+
+  test('en euros: sin «priceOrig» ni «currency» y el gasto por persona no cambia (150 €)', () => {
+    const update = montar({ hotels: [hotel], expenses: [] });
+    editarYGuardar();
+    fireEvent.press(screen.getByText('Guardar hotel'));
+    const h = guardado(update);
+    expect(h.pricePerNight).toBe(100);
+    expect('priceOrig' in h).toBe(false);
+    expect('currency' in h).toBe(false);
+    expect(update.mock.calls[0][0].expenses[0].amount).toBe(150);
+  });
+
+  test('en USD: pricePerNight en euros, original en «priceOrig» y gasto por persona en euros', () => {
+    const update = montar({ fx: { USD: 0.9 }, hotels: [hotel], expenses: [] });
+    editarYGuardar();
+    fireEvent.press(screen.getByText('USD'));                  // el 100 escrito pasa a ser 100 USD
+    expect(screen.getByText('Precio/noche por habitación (USD)')).toBeTruthy();
+    fireEvent.press(screen.getByText('Guardar hotel'));
+    const h = guardado(update);
+    expect(h.pricePerNight).toBe(90);
+    expect(h.priceOrig).toEqual({ amount: 100, currency: 'USD', rate: 0.9 });
+    expect('currency' in h).toBe(false);
+    expect(update.mock.calls[0][0].expenses[0].amount).toBe(135);   // 90 € × 3 noches ÷ 2 personas
+  });
+
+  test('la vista previa por persona y noche se calcula en euros (100 USD ÷ 2 = 45 €)', () => {
+    montar({ fx: { USD: 0.9 }, hotels: [hotel], expenses: [] });
+    editarYGuardar();
+    fireEvent.press(screen.getByText('USD'));
+    expect(screen.getByText(/≈ 45\.00 € por persona y noche/)).toBeTruthy();
+    expect(screen.getByText('≈ 90.00 € (1 USD = 0.9 €)')).toBeTruthy();
+  });
+
+  test('la tarjeta muestra «100.00 € (110 USD)» y en euros sin paréntesis', () => {
+    montar({ hotels: [{ ...hotel, pricePerNight: 100, priceOrig: { amount: 110, currency: 'USD', rate: 0.909 } }], expenses: [] });
+    expect(screen.getByText('100.00 € (110 USD)')).toBeTruthy();
+  });
+
+  test('en euros la tarjeta no lleva paréntesis', () => {
+    montar({ hotels: [hotel], expenses: [] });
+    expect(screen.getByText('100.00 €')).toBeTruthy();
+  });
+
+  test('al editar recupera el importe y la divisa originales', () => {
+    montar({ fx: { USD: 0.9 }, hotels: [{ ...hotel, pricePerNight: 99, priceOrig: { amount: 110, currency: 'USD', rate: 0.9 } }], expenses: [] });
+    editarYGuardar();
+    expect(screen.getByDisplayValue('110')).toBeTruthy();
+    expect(screen.getByText('Precio/noche por habitación (USD)')).toBeTruthy();
+  });
+
+  test('al pasar a euros al editar desaparece «priceOrig»', () => {
+    const update = montar({ fx: { USD: 0.9 }, hotels: [{ ...hotel, pricePerNight: 99, priceOrig: { amount: 110, currency: 'USD', rate: 0.9 } }], expenses: [] });
+    editarYGuardar();
+    fireEvent.press(screen.getByText('EUR'));
+    fireEvent.press(screen.getByText('Guardar hotel'));
+    const h = guardado(update);
+    expect(h.pricePerNight).toBe(110);
+    expect('priceOrig' in h).toBe(false);
+  });
+
+  test('un precio negativo no se guarda y uno vacío da 0 (sin gasto)', () => {
+    const update = montar({ hotels: [hotel], expenses: [] });
+    editarYGuardar();
+    fireEvent.changeText(precio(), '-5');
+    fireEvent.press(screen.getByText('Guardar hotel'));
+    expect(update).not.toHaveBeenCalled();
+    fireEvent.changeText(precio(), '');
+    fireEvent.press(screen.getByText('Guardar hotel'));
+    expect(guardado(update).pricePerNight).toBe(0);
+    expect(update.mock.calls[0][0].expenses).toBeUndefined();   // sin precio no hay gasto que crear
+  });
+
+  test('con cambios caducados se descargan al abrir Hoteles (BCE simulado) y se guardan en el viaje', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ rates: { USD: 1.25, GBP: 0.8, JPY: 160, CHF: 0.95, CAD: 1.5, AUD: 1.6, MXN: 20, CNY: 7.8 } }) });
+    const update = jest.fn();
+    render(<HotelsScreen trip={{ hotels: [], expenses: [], fx: {}, fxAt: Date.now() - 2 * 3600 * 1000 }} update={update} />);
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ fx: expect.objectContaining({ USD: 0.8 }), fxAt: expect.any(Number) }));
+  });
+
+  test('con cambios recientes no hay ninguna petición al abrir Hoteles', () => {
+    montar({ hotels: [], expenses: [] });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
