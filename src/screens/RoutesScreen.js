@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, View, TouchableOpacity } from 'react-native';
+import { ScrollView, View, TouchableOpacity, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, H, Field, Btn, Row, LinkText, Chip, Label, Muted, confirm, notify , Text, DateField, useTheme } from '../components/ui';
 import { uid } from '../store';
 import { money, num, googleMapsRouteUrl, fmtDMY } from '../utils';
@@ -135,33 +136,8 @@ export default function RoutesScreen({ trip, update }) {
   const full = section === 'general' && routes.length > 1 ? fullRoute(routes) : null;
   const total = routes.reduce((a, r) => a + num(r.cost), 0);
 
-  return (
-    <ScrollView contentContainerStyle={{ padding: 14 }}>
-      {/* Dos apartados: la ruta general y otras rutas (estas últimas NO se añaden a la ruta general de Google Maps) */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {SECTIONS.map(([k, label]) => (
-          <Chip key={k} title={`${label} (${allRoutes.filter((r) => sectionOf(r) === k).length})`} active={section === k} onPress={() => { if (!form) setSection(k); }} />
-        ))}
-      </View>
-      <Card>
-        <H>{section === 'general' ? 'Ruta general del viaje' : 'Otras rutas'}</H>
-        <Row label="Trayectos" value={routes.length} />
-        <Row label="Coste total" value={money(total)} />
-        {section === 'general' && full && (
-          <>
-            <LinkText url={googleMapsRouteUrl(full.origin, full.destination, full.all.slice(0, MAX_WP), 'driving')}>
-              Ver ruta completa en Google Maps
-            </LinkText>
-            {full.all.length > MAX_WP && (
-              <Muted>Google Maps admite máximo {MAX_WP} paradas intermedias: se han omitido {full.all.length - MAX_WP} del enlace de la ruta completa.</Muted>
-            )}
-          </>
-        )}
-        {section === 'otras' && <Muted>Estas rutas son aparte: no se añaden a la ruta completa de Google Maps de la ruta general. Cada una tiene su propio botón «Abrir en Google Maps».</Muted>}
-        {!form && <Btn title="+ Añadir trayecto" onPress={() => openForm({ ...makeEmpty(range.start), section })} />}
-      </Card>
-
-      {form && (
+  // Formulario del trayecto (se muestra en línea al añadir y en una ventana flotante al editar)
+  const formView = form ? (
         <Card>
           <H>{form.id ? 'Editar trayecto' : 'Nuevo trayecto'}</H>
           <Label>Apartado</Label>
@@ -216,6 +192,46 @@ export default function RoutesScreen({ trip, update }) {
           <Btn title="Guardar" onPress={save} />
           <Btn title="Cancelar" kind="outline" onPress={closeForm} />
         </Card>
+  ) : null;
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: 14 }}>
+      {/* Dos apartados: la ruta general y otras rutas (estas últimas NO se añaden a la ruta general de Google Maps) */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {SECTIONS.map(([k, label]) => (
+          <Chip key={k} title={`${label} (${allRoutes.filter((r) => sectionOf(r) === k).length})`} active={section === k} onPress={() => { if (!form) setSection(k); }} />
+        ))}
+      </View>
+      <Card>
+        <H>{section === 'general' ? 'Ruta general del viaje' : 'Otras rutas'}</H>
+        <Row label="Trayectos" value={routes.length} />
+        <Row label="Coste total" value={money(total)} />
+        {section === 'general' && full && (
+          <>
+            <LinkText url={googleMapsRouteUrl(full.origin, full.destination, full.all.slice(0, MAX_WP), 'driving')}>
+              Ver ruta completa en Google Maps
+            </LinkText>
+            {full.all.length > MAX_WP && (
+              <Muted>Google Maps admite máximo {MAX_WP} paradas intermedias: se han omitido {full.all.length - MAX_WP} del enlace de la ruta completa.</Muted>
+            )}
+          </>
+        )}
+        {section === 'otras' && <Muted>Estas rutas son aparte: no se añaden a la ruta completa de Google Maps de la ruta general. Cada una tiene su propio botón «Abrir en Google Maps».</Muted>}
+        {!form && <Btn title="+ Añadir trayecto" onPress={() => openForm({ ...makeEmpty(range.start), section })} />}
+      </Card>
+
+      {/* Añadir: el formulario va en línea; al editar se abre en una ventana flotante que se cierra al guardar o cancelar */}
+      {form && !form.id && formView}
+      {form && form.id && (
+        <Modal visible animationType="slide" transparent onRequestClose={closeForm}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center' }}>
+            <SafeAreaView style={{ flex: 1, justifyContent: 'center' }}>
+              <View style={{ maxHeight: '92%', marginHorizontal: 10, borderRadius: 12, backgroundColor: colors.bg, overflow: 'hidden' }}>
+                <ScrollView contentContainerStyle={{ padding: 10 }} keyboardShouldPersistTaps="handled">{formView}</ScrollView>
+              </View>
+            </SafeAreaView>
+          </View>
+        </Modal>
       )}
 
       {routes.map((r, i) => (

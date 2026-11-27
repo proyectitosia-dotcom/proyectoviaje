@@ -37,6 +37,7 @@
 - Si Transitous falla, no hay internet o no hay rutas: mensaje claro en español y se puede rellenar duración y precio a mano. **La app nunca debe cerrarse.**
 - **Política de Transitous (obligatoria):** User-Agent propio con contacto (`CONTACT` en `src/transitous.js`, hoy vacío), caché (lugares 7 días, rutas 30 min), consultas solo al pulsar botones, tope diario de consultas, atribución a `transitous.org/sources` y OpenStreetMap, uso no comercial y código abierto.
 - Datos antiguos o incompletos no deben romper la pantalla (`arr`, `txt` y `normalizeTrip`).
+- **Editar un trayecto** abre el formulario en una **ventana flotante** (`Modal`, mismo patrón que Hoteles: `formView` + `Modal` + `SafeAreaView`) que se cierra al guardar o cancelar; **añadir** sigue siendo el formulario en línea.
 
 ## 5. Decisiones tomadas
 - Fechas del viaje por viaje; las fechas de la ruta solo dentro del rango.
@@ -45,8 +46,10 @@
 ## 6. Pendientes y avisos abiertos
 - Rellenar `CONTACT` en `src/transitous.js` (lo decide el usuario).
 - Tests de pantalla de Rutas pendientes (los hace Tests).
+- **Divisa del coste** (orden del usuario): al añadir el coste de un trayecto debe poder elegirse la divisa con el mismo sistema que Gastos. Se espera el aviso del chat principal de que Gastos ha aplicado el componente compartido; el gasto automático debe seguir sumando en euros.
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
+- Editar trayecto en ventana flotante (Modal); añadir sigue en línea.
 - `a66fb0f` Líneas y mapa con el trazado en «Consultar ruta».
 - `ee673ad` Hora opcional (todo el día) y apartado «Otras rutas».
 - `bc9c31a` Rutas con Transitous (buscar lugares, consultar, actualizar, caché y atribución).
