@@ -27,6 +27,7 @@
 - `src/links.js`: `openExternal`, `isMapsLink`, `routeMapsUrl`.
 - `src/components/`: `ui.js` (Card, Btn, Field, Chip, **DateField**, Text temático, notify/confirm), `ErrorBoundary.js` (+`describeError` en español), `TripDatesGate.js`, `PlaceSearch.js`, `PlanView.js`, `RouteMap.js`, `MapView(.native).js` + `mapHtml.js` (Leaflet empaquetado, sin CDN; generado por `scripts/genLeaflet.js` en `src/vendor/leafletSource.js`), `BookingBrowser(.native).js`.
 - Tests: `__tests__/*.test.js` (Jest + jest-expo + Testing Library), `jest.setup.js`, `npm test` (122 tests de lógica pura, sin internet).
+- **Archivos de contexto (orden del usuario):** `CLAUDE.md` obliga a cada sesión a leer el suyo al empezar: este chat lee `Mainsave.md`; cada subchat lee `Mainsave_<Nombre>.md` (`Mainsave_Ruta.md`, `_Hoteles`, `_Calendario`, `_Gastos`, `_Grupo`, `_Mapa`, `_Tests`). Cada uno los actualiza con cada cambio, solo con la información importante nueva, en el mismo commit. Al crear un subchat nuevo, crearle también su `Mainsave_<Nombre>.md` y añadirlo a la tabla de `CLAUDE.md`.
 - Archivos de arranque: `Iniciar Proyecto Viaje.bat` (Windows; se actualiza solo por git o ZIP; muestra la versión; `npx expo start --web --port 8081 --clear`), `README.md`.
 
 ## 3. Funciones por apartado (estado actual)
@@ -90,6 +91,8 @@ Ruta `session_01XMTbiQQGDTu3GRqsMKFHTi`, Hoteles `session_01XMTbiPSVsrMjPbN3b6hi
 - `eas build` (APK/iOS) sin hacer. Tests de pantallas (Ruta, Calendario, Gastos, Grupo) y recorrido Playwright: pendientes en el subchat Tests.
 
 ## 10. Registro de cambios importantes (añadir arriba la novedad)
+- Archivos `Mainsave_<Nombre>.md` de cada subchat y `CLAUDE.md` (lectura obligatoria al empezar cada sesión).
+- `7f7fc97` Mainsave.md creado.
 - `23a53c0` Tests: Jest + 122 tests de lógica pura aplicados.
 - `a66fb0f` Consultar ruta: líneas, mapa del trazado, textos en español.
 - `ee673ad` Rutas: hora opcional y «Otras rutas».
