@@ -33,7 +33,7 @@
 - **Si todo sale bien:** aplicas el cambio (merge en `claude/lucid-mayer-vak935` y push, sin force-push) y avisas al chat principal (`session_01XMTbiMz66vjZyaDLCDKcCN`) con un mensaje que **empiece por «TESTS OK · APLICADO»**: hash final, subchat de origen y 2-4 líneas con lo importante. El chat principal genera entonces el ZIP y el `.bat`.
 - **Si algo falla:** no aplicas nada; avisas al subchat de origen (archivo, línea, mensaje) y al chat principal con un mensaje que **empiece por «TESTS FALLAN»** y 2-4 líneas.
 - **Al usuario solo le cuentas lo importante:** qué probaste, nº de tests (pasan/fallan), qué falló y por qué, y qué no pudiste probar (GPS real, móvil…). Nada de volcados de logs ni listas largas.
-- **Infraestructura existente:** Jest con `jest-expo` ~52 y `@testing-library/react-native` 12; `npm test`; `jest.setup.js` con mocks de AsyncStorage, `expo-location`, `react-native-webview` y `fetch`; carpeta `__tests__/` (`utils`, `tripRange`, `transitous`, `links`: 122 tests de lógica pura; `HotelsScreen` y `ExpensesScreen`: pantallas con Testing Library, 136 tests en total). Los tests **no hacen peticiones reales** (ni Transitous, ni Firebase, ni OpenStreetMap) y pasan sin conexión.
+- **Infraestructura existente:** Jest con `jest-expo` ~52 y `@testing-library/react-native` 12; `npm test`; `jest.setup.js` con mocks de AsyncStorage, `expo-location`, `react-native-webview` y `fetch`; carpeta `__tests__/` (`utils`, `tripRange`, `transitous`, `links`: 122 tests de lógica pura; `HotelsScreen` y `ExpensesScreen`: pantallas con Testing Library, `RoutesScreen`: validación de fechas/horas, hora opcional, secciones general/otras, edición en ventana flotante y Consultar ruta con `planRoute` mockeado; 165 tests en total). Los tests **no hacen peticiones reales** (ni Transitous, ni Firebase, ni OpenStreetMap) y pasan sin conexión.
 - **No cambies la lógica de la app para que pasen los tests:** si un test revela un bug real, avisa al usuario y al chat principal sin arreglarlo por tu cuenta.
 
 ## 5. Decisiones tomadas
@@ -41,11 +41,12 @@
 - Para lo que toque Transitous o el mapa se usan mocks; solo una comprobación real puntual si es imprescindible.
 
 ## 6. Pendientes y avisos abiertos
-- Tests de pantalla de Rutas, Calendario, Gastos (ampliar: totales individuales y reparto con cifras exactas) y Grupo. Hoteles y un primer test de Gastos ya hechos.
-- Recorrido con Playwright: hecho el de Hoteles (`e2e/recorrido-hoteles.js`: crear viaje, fechas obligatorias, hotel, edición en ventana flotante, Gastos). Faltan añadir ruta y calendario. Truco: servir `npx expo export --platform web` con `python3 -m http.server 8081`; los calendarios (DateField) se manejan pulsando `›` y el número del día.
+- Tests de pantalla de Calendario, Gastos (ampliar: totales individuales y reparto con cifras exactas) y Grupo. Hoteles, Rutas y un primer test de Gastos ya hechos.
+- Recorrido con Playwright: hecho el de Hoteles (`e2e/recorrido-hoteles.js`: crear viaje, fechas obligatorias, hotel, edición en ventana flotante, Gastos). Hecho también `e2e/recorrido-rutas.js`. Falta el del calendario. Truco: servir `npx expo export --platform web` con `python3 -m http.server 8081`; los calendarios (DateField) se manejan pulsando `›` y el número del día.
 - Comprobación de compilación web y Android con cada rama candidata.
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
+- Ruta `acdb81d` verificado y aplicado: «Editar» trayecto en ventana flotante (Modal), «Añadir» sigue en línea. 29 tests de pantalla nuevos (165 en total), `expo export` web/android OK y recorrido Playwright `e2e/recorrido-rutas.js` OK. Mock de WebView con `forwardRef`. No probado: Consultar ruta real (Transitous mockeado), mapa del trazado, selector de fecha y buscador de lugares dentro del Modal en móvil real.
 - Hoteles `2c1f19a` verificado y aplicado: fechas dd-mm-aaaa en la tarjeta y «Editar» en ventana flotante (Modal); «Añadir» sigue en línea. Test de pantalla ampliado (136 tests), `expo export` web/android OK y recorrido Playwright web OK (sin errores de página). No probado: calendario y navegador de Booking dentro del Modal en móvil real.
 - Hoteles `1f4ca40` verificado y aplicado: gasto automático de hotel = precio/noche × noches ÷ personas por habitación (concepto «Hotel X (por persona)»). Tests de pantalla `HotelsScreen` y `ExpensesScreen`; `expo export` web y android compilan. Playwright no ejecutado para este cambio (cubierto por tests de pantalla).
 - `23a53c0` Infraestructura Jest y 122 tests de lógica pura (utils, tripRange, transitous, links).
