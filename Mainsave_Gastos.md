@@ -36,6 +36,7 @@
 - «Mis movimientos» muestra solo mis gastos personales (sin vínculo de grupo). Los **gastos en grupo** (formulario propio) se guardan en Gastos y en Grupo, vinculados por `groupId`, y se ven entre todos.
 - **Reparto de un gasto de grupo:** por igual o con **cifras exactas** en € por persona (`group.expenses[].shares`); el selector valida que sumen el total.
 - **Divisas:** los importes se guardan siempre en euros; cambio editable y actualizado solo desde el BCE (Frankfurter) con respaldo open.er-api.com.
+  - **Código compartido (para Ruta y Hoteles):** `src/currency.js` (lista de divisas, cambios por defecto, `toEuros`, `rateFor`, `fetchRates` y el hook `useRates(trip, update)` que devuelve `{ fx, rateOf, convert, ensureFresh, status }` y se actualiza solo) y `src/components/CurrencyField.js` (selector de divisa + vista previa «≈ X €»; props `currency`, `amount`, `rates`, `onChange`). Los cambios viven en `trip.fx` / `trip.fxAt`, globales al viaje. Gastos los usa igual que antes (sin cambios de comportamiento).
 - Los costes de hoteles (`hotelId`/`fromHotels`) y de rutas (`fromRoutes`) se reflejan solos en el resumen. Los costes de «Otras rutas» también suman.
 - El selector de fecha de los gastos solo permite días dentro del rango del viaje.
 - Borrar un gasto en grupo desde Grupo borra también el personal vinculado (lo gestiona `GroupScreen.js`).
@@ -48,6 +49,7 @@
 - Tests de pantalla de Gastos pendientes (los hace Tests).
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
+- Refactor de divisas: selector y conversión a euros extraídos a `src/currency.js` + `src/components/CurrencyField.js` para reutilizarlos en Ruta y Hoteles (Gastos no cambia). Los helpers puros están en un archivo nuevo en vez de `utils.js` para no tocar el compartido.
 - `cc162e7` Reparto con cifras exactas y lo cobrado se resta de su categoría.
 - `a8cef34` Cambio de tipo de gasto, borrado enlazado y resumen reorganizado.
 - `f8ea3cd` Mi total suma lo pagado en grupo y resta lo devuelto.

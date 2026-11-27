@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ScrollView, View, TouchableOpacity } from 'react-native';
 import { Card, H, Field, Btn, Chip, Row, Label, Muted, confirm, notify , Text, DateField, useTheme } from '../components/ui';
 import { uid } from '../store';
+import CurrencyField from '../components/CurrencyField';
+import { CURRENCIES, roundMoney, useRates } from '../currency';
 import { money, num, fmtDMY, shareMap } from '../utils';
 import { useMe } from '../user';
 
@@ -14,45 +16,7 @@ export const CATEGORIES = [
   ['otros', 'Otros costes', '🧾'],
 ];
 
-// Divisas: los importes se guardan siempre en euros; el cambio (euros por 1 unidad) es editable y global al viaje
-export const CURRENCIES = [['EUR', 'Euro'], ['USD', 'Dólar EE. UU.'], ['GBP', 'Libra esterlina'], ['JPY', 'Yen'], ['CHF', 'Franco suizo'], ['CAD', 'Dólar canadiense'], ['AUD', 'Dólar australiano'], ['MXN', 'Peso mexicano'], ['CNY', 'Yuan']];
-export const DEFAULT_RATES = { USD: 0.92, GBP: 1.17, JPY: 0.0062, CHF: 1.05, CAD: 0.67, AUD: 0.6, MXN: 0.05, CNY: 0.13 };
-const r2 = (x) => Math.round(x * 100) / 100;
-
-// Cotizaciones online (euros por 1 unidad de cada divisa). Fuente principal: BCE vía Frankfurter; respaldo: open.er-api.com
-async function fetchRates() {
-  const codes = CURRENCIES.map(([c]) => c).filter((c) => c !== 'EUR');
-  const get = async (url) => {
-    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const t = setTimeout(() => ctl && ctl.abort(), 8000);
-    try { const r = await fetch(url, ctl ? { signal: ctl.signal } : undefined); if (!r.ok) throw new Error(`HTTP ${r.status}`); return await r.json(); } finally { clearTimeout(t); }
-  };
-  const sources = [
-    [`https://api.frankfurter.app/latest?from=EUR&to=${codes.join(',')}`, (j) => j.rates],
-    ['https://open.er-api.com/v6/latest/EUR', (j) => (j.result === 'success' ? j.rates : null)],
-  ];
-  for (const [url, pick] of sources) {
-    try {
-      const perEur = pick(await get(url));
-      const out = {};
-      for (const c of codes) { const v = Number(perEur && perEur[c]); if (v > 0) out[c] = Number((1 / v).toPrecision(6)); }
-      if (Object.keys(out).length === codes.length) return { rates: out, source: url.includes('frankfurter') ? 'BCE' : 'open.er-api.com' };
-    } catch (e) { /* prueba la siguiente fuente */ }
-  }
-  throw new Error('sin conexión con las fuentes de cambio');
-}
-const FX_MAX_AGE = 3600 * 1000; // los cambios se renuevan solos si tienen más de 1 hora
-
-function CurrencyPicker({ value, onChange }) {
-  return (
-    <View>
-      <Label>Divisa del importe</Label>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {CURRENCIES.map(([c]) => <Chip key={c} title={c} active={value === c} onPress={() => onChange(c)} />)}
-      </View>
-    </View>
-  );
-}
+const r2 = roundMoney;
 
 // Participantes a repartir: los elegidos o, si no hay ninguno, todos
 const splitIds = (members, value) => (value.participants.length ? value.participants.filter((x) => members.some((m) => m.id === x)) : members.map((m) => m.id));
@@ -118,23 +82,10 @@ export default function ExpensesScreen({ trip, update }) {
   const [form, setForm] = useState({ category: 'vuelo', concept: '', amount: '', date: '', currency: 'EUR' });
   const [gform, setGform] = useState({ category: 'comida', concept: '', amount: '', date: '', currency: 'EUR', paidBy: null, participants: [], split: 'equal', shares: {} });
   const [rateDraft, setRateDraft] = useState({});
-  const fx = trip.fx || {};
-  const rateOf = (c) => (c === 'EUR' ? 1 : num(fx[c]) > 0 ? num(fx[c]) : DEFAULT_RATES[c] || 1);
-  // Importe escrito en la divisa elegida -> euros (con el importe original para mostrarlo)
-  const convert = (text, cur) => { const orig = r2(num(text)); const rate = rateOf(cur); return { eur: r2(orig * rate), ...(cur !== 'EUR' ? { orig: { amount: orig, currency: cur, rate } } : {}) }; };
-  const [fxStatus, setFxStatus] = useState('');
+  // Cambios de divisa del viaje y conversión a euros (compartido con Ruta/Hoteles: src/currency.js)
+  const rates = useRates(trip, update);
+  const { fx, rateOf, convert, status: fxStatus } = rates;
   const [fxOpen, setFxOpen] = useState(false);
-  const refreshRates = async () => {
-    setFxStatus('Actualizando cambios…');
-    try {
-      const { rates, source } = await fetchRates();
-      await update({ fx: { ...fx, ...rates }, fxAt: Date.now() });
-      setFxStatus(`Cambios actualizados (${source}) · ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`);
-    } catch (e) { setFxStatus('No se pudo actualizar online; se usan los últimos cambios guardados.'); }
-  };
-  // Automático: al abrir Gastos y al elegir una divisa, si los cambios tienen más de 1 hora se descargan solos
-  const ensureFresh = () => { if (!trip.fxAt || Date.now() - trip.fxAt > FX_MAX_AGE) refreshRates(); };
-  useEffect(() => { ensureFresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const commitRate = (c) => {
     if (rateDraft[c] === undefined) return;
     const v = num(rateDraft[c]);
@@ -308,8 +259,7 @@ export default function ExpensesScreen({ trip, update }) {
           <View style={{ flex: 1 }}><Field label="Importe" value={form.amount} onChangeText={(v) => setForm({ ...form, amount: v })} keyboardType="decimal-pad" /></View>
           <View style={{ flex: 1 }}><DateField label="Fecha" value={form.date} onChange={(v) => setForm({ ...form, date: v })} /></View>
         </View>
-        <CurrencyPicker value={form.currency} onChange={(c) => { setForm({ ...form, currency: c }); if (c !== 'EUR') ensureFresh(); }} />
-        {form.currency !== 'EUR' && <Muted>≈ {money(convert(form.amount, form.currency).eur)} (1 {form.currency} = {rateOf(form.currency)} €)</Muted>}
+        <CurrencyField currency={form.currency} amount={form.amount} rates={rates} onChange={(c) => setForm({ ...form, currency: c })} />
         <Btn title="Añadir" onPress={add} />
       </Card>
 
@@ -326,8 +276,7 @@ export default function ExpensesScreen({ trip, update }) {
               <View style={{ flex: 1 }}><Field label="Importe" value={gform.amount} onChangeText={(v) => setGform({ ...gform, amount: v })} keyboardType="decimal-pad" /></View>
               <View style={{ flex: 1 }}><DateField label="Fecha" value={gform.date} onChange={(v) => setGform({ ...gform, date: v })} /></View>
             </View>
-            <CurrencyPicker value={gform.currency} onChange={(c) => { setGform({ ...gform, currency: c }); if (c !== 'EUR') ensureFresh(); }} />
-            {gform.currency !== 'EUR' && <Muted>≈ {money(convert(gform.amount, gform.currency).eur)} (1 {gform.currency} = {rateOf(gform.currency)} €)</Muted>}
+            <CurrencyField currency={gform.currency} amount={gform.amount} rates={rates} onChange={(c) => setGform({ ...gform, currency: c })} />
             <SharePicker members={members} value={gform} total={convert(gform.amount, gform.currency).eur} onChange={(v) => setGform({ ...gform, ...v })} />
             <Btn title="Añadir gasto en grupo" onPress={addGroup} />
           </View>
