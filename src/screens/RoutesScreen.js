@@ -9,12 +9,14 @@ import { isMapsLink, openExternal as openUrl, routeMapsUrl } from '../links';
 import PlaceSearch from '../components/PlaceSearch';
 import PlanView from '../components/PlanView';
 import RouteMap from '../components/RouteMap';
+import CurrencyField from '../components/CurrencyField';
+import { useRates } from '../currency';
 import { planRoute, summarize, errorMessage, SOURCES_URL, fmtTime as _fmtTime, fmtDur as _fmtDur } from '../transitous';
 
 const TRANSPORTS = ['Avión', 'Tren', 'Autobús', 'Metro', 'Tranvía', 'Coche', 'Taxi', 'Barco', 'A pie', 'Bici'];
 const MODES = [['transit', 'Transporte público'], ['driving', 'Coche'], ['walking', 'A pie'], ['bicycling', 'Bici']];
 // Formulario vacío de ruta. from/to son los lugares elegidos con Transitous (nombre, lat, lon, zona horaria).
-const makeEmpty = (date = '') => ({ name: '', originText: '', destText: '', from: null, to: null, stops: '', date, time: '', duration: '', cost: '', transports: [], lines: '', mode: 'transit', mapUrl: '', plan: null, section: 'general' });
+const makeEmpty = (date = '') => ({ name: '', originText: '', destText: '', from: null, to: null, stops: '', date, time: '', duration: '', cost: '', currency: 'EUR', transports: [], lines: '', mode: 'transit', mapUrl: '', plan: null, section: 'general' });
 
 const validDate = (d) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
@@ -56,6 +58,7 @@ const fmtTimeShort = (o, tz) => `${_fmtTime(o.start, tz)} · ${_fmtDur(o.duratio
 export default function RoutesScreen({ trip, update }) {
   const range = useTripRange();
   const { colors } = useTheme();
+  const rates = useRates(trip, update); // cambios de divisa del viaje (compartido con Gastos: src/currency.js)
   const [form, setForm] = useState(null);
   const [results, setResults] = useState(null);   // itinerarios devueltos por Transitous al consultar
   const [picked, setPicked] = useState(0);        // opción elegida (0, 1 o 2)
@@ -105,14 +108,17 @@ export default function RoutesScreen({ trip, update }) {
     if (cost < 0) return notify('Coste no válido', 'El coste no puede ser negativo.');
     const mapUrl = txt(form.mapUrl);
     if (mapUrl && !isMapsLink(mapUrl)) return notify('Enlace no válido', 'Pega un enlace de Google Maps (https://www.google.com/maps/... o https://maps.app.goo.gl/...).');
-    const { originText, destText, ...rest } = form;
-    const r = { ...rest, section: sectionOf(form), origin, destination, date, time, mapUrl, stops: txt(form.stops).split(',').map((x) => x.trim()).filter(Boolean), cost, duration: txt(form.duration), lines: txt(form.lines) };
+    // El coste se escribe en la divisa elegida; se guarda SIEMPRE en euros (cost) y, si no es euro, el importe original (orig)
+    const { eur, orig } = rates.convert(form.cost, form.currency);
+    const { originText, destText, currency, ...rest } = form;
+    const r = { ...rest, section: sectionOf(form), origin, destination, date, time, mapUrl, stops: txt(form.stops).split(',').map((x) => x.trim()).filter(Boolean), cost: eur, duration: txt(form.duration), lines: txt(form.lines) };
+    if (orig) r.orig = orig; else delete r.orig; // Firestore no admite undefined
     const list = form.id ? allRoutes.map((x) => (x.id === form.id ? r : x)) : [...allRoutes, { ...r, id: uid() }];
     list.sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
     update({ routes: list });
     closeForm();
   };
-  const edit = (r) => openForm({ ...makeEmpty(), ...r, originText: txt(r.origin), destText: txt(r.destination), from: r.from || null, to: r.to || null, date: txt(r.date), time: txt(r.time), duration: txt(r.duration), lines: txt(r.lines), mapUrl: txt(r.mapUrl), stops: arr(r.stops).join(', '), transports: arr(r.transports), cost: String(r.cost ?? ''), plan: r.plan || null, section: sectionOf(r) });
+  const edit = (r) => openForm({ ...makeEmpty(), ...r, originText: txt(r.origin), destText: txt(r.destination), from: r.from || null, to: r.to || null, date: txt(r.date), time: txt(r.time), duration: txt(r.duration), lines: txt(r.lines), mapUrl: txt(r.mapUrl), stops: arr(r.stops).join(', '), transports: arr(r.transports), cost: r.orig && r.orig.currency ? String(r.orig.amount ?? '') : String(r.cost ?? ''), currency: r.orig && r.orig.currency ? r.orig.currency : 'EUR', plan: r.plan || null, section: sectionOf(r) });
   const remove = (r) => confirm('¿Eliminar esta ruta?', () => update({ routes: allRoutes.filter((x) => x.id !== r.id) }));
 
   // Botón "Actualizar": vuelve a consultar Transitous con los datos guardados (máximo una vez por minuto)
@@ -176,8 +182,9 @@ export default function RoutesScreen({ trip, update }) {
           <Label>Datos manuales (se rellenan solos al consultar; edítalos si hace falta)</Label>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><Field label="Duración" value={form.duration} onChangeText={(v) => set('duration', v)} placeholder="6h 30min" /></View>
-            <View style={{ flex: 1 }}><Field label="Precio (€) · a mano" value={form.cost} onChangeText={(v) => set('cost', v)} keyboardType="decimal-pad" /></View>
+            <View style={{ flex: 1 }}><Field label="Precio · a mano" value={form.cost} onChangeText={(v) => set('cost', v)} keyboardType="decimal-pad" /></View>
           </View>
+          <CurrencyField currency={form.currency} amount={form.cost} rates={rates} onChange={(c) => set('currency', c)} label="Divisa del precio" />
           <Muted>Transitous no da el precio: escríbelo tú.</Muted>
           <Label>Tipo de transporte</Label>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
@@ -254,7 +261,7 @@ export default function RoutesScreen({ trip, update }) {
               <Row label="Líneas" value={txt(r.lines) || '-'} />
             </>
           )}
-          <Row label="Precio" value={money(r.cost)} />
+          <Row label="Precio" value={`${money(r.cost)}${r.orig && r.orig.currency ? ` (${r.orig.amount} ${r.orig.currency})` : ''}`} />
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
             <Btn small title="Abrir en Google Maps" onPress={() => openUrl(routeMapsUrl(r))} style={{ flex: 1 }} />
             <Btn small kind="outline" title={refreshing === r.id ? 'Actualizando…' : '🔄 Actualizar'} onPress={() => refresh(r)} style={{ flex: 1 }} />

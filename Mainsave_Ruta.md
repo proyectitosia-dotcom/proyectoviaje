@@ -38,6 +38,7 @@
 - **Política de Transitous (obligatoria):** User-Agent propio con contacto (`CONTACT` en `src/transitous.js`, hoy vacío), caché (lugares 7 días, rutas 30 min), consultas solo al pulsar botones, tope diario de consultas, atribución a `transitous.org/sources` y OpenStreetMap, uso no comercial y código abierto.
 - Datos antiguos o incompletos no deben romper la pantalla (`arr`, `txt` y `normalizeTrip`).
 - **Editar un trayecto** abre el formulario en una **ventana flotante** (`Modal`, mismo patrón que Hoteles: `formView` + `Modal` + `SafeAreaView`) que se cierra al guardar o cancelar; **añadir** sigue siendo el formulario en línea.
+- **Divisa del precio** (mismo sistema que Gastos, `src/currency.js` + `src/components/CurrencyField.js`): el precio se escribe en la divisa elegida y se guarda **siempre en euros** en `route.cost` (lo que suma Gastos como «Rutas del viaje»); si no es euro se guarda también `route.orig = { amount, currency, rate }` y la tarjeta lo muestra («12,50 € (15 USD)»). Al editar se recupera el importe y la divisa originales. Los cambios son globales del viaje (`trip.fx`, BCE vía Frankfurter, se renuevan solos si pasa 1 h) y `useRates` los actualiza al abrir la pestaña Ruta.
 
 ## 5. Decisiones tomadas
 - Fechas del viaje por viaje; las fechas de la ruta solo dentro del rango.
@@ -45,10 +46,10 @@
 
 ## 6. Pendientes y avisos abiertos
 - Rellenar `CONTACT` en `src/transitous.js` (lo decide el usuario).
-- Tests de pantalla de Rutas pendientes (los hace Tests).
-- **Divisa del coste** (orden del usuario): al añadir el coste de un trayecto debe poder elegirse la divisa con el mismo sistema que Gastos. Se espera el aviso del chat principal de que Gastos ha aplicado el componente compartido; el gasto automático debe seguir sumando en euros.
+- Sin probar en móvil real (lo no probable en el entorno de Tests): `DateField`, `PlaceSearch` y el mapa del trazado dentro de la ventana flotante.
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
+- Divisa del precio del trayecto (selector compartido con Gastos; se guarda en euros + importe original).
 - Editar trayecto en ventana flotante (Modal); añadir sigue en línea.
 - `a66fb0f` Líneas y mapa con el trazado en «Consultar ruta».
 - `ee673ad` Hora opcional (todo el día) y apartado «Otras rutas».
