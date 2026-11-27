@@ -1,6 +1,6 @@
 // Pantalla Rutas: validaciones, hora opcional, secciones general/otras y edición en ventana flotante.
 import React from 'react';
-import { Alert, Modal } from 'react-native';
+import { Alert, Modal, TextInput } from 'react-native';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import RoutesScreen from '../src/screens/RoutesScreen';
 import { TripRangeProvider } from '../src/tripRange';
@@ -25,7 +25,7 @@ afterEach(() => jest.restoreAllMocks());
 
 const montar = (trip, range = { start: '2026-12-01', end: '2026-12-10' }) => {
   const update = jest.fn();
-  render(<TripRangeProvider start={range.start} end={range.end}><RoutesScreen trip={trip} update={update} /></TripRangeProvider>);
+  render(<TripRangeProvider start={range.start} end={range.end}><RoutesScreen trip={{ fxAt: Date.now(), ...trip }} update={update} /></TripRangeProvider>);
   return update;
 };
 const avisoCon = (titulo) => alerta.mock.calls.some((c) => c[0] === titulo);
@@ -318,5 +318,118 @@ describe('RoutesScreen: Consultar ruta (Transitous mockeado)', () => {
     fireEvent.press(screen.getByText('🔄 Actualizar'));
     expect(avisoCon('No se puede actualizar')).toBe(true);
     expect(planRoute).not.toHaveBeenCalled();
+  });
+});
+
+describe('RoutesScreen: divisa del precio', () => {
+  const precio = () => screen.UNSAFE_getAllByType(TextInput).filter((t) => t.props.keyboardType === 'decimal-pad')[0];
+  const guardada = (update) => update.mock.calls[0][0].routes[0];
+
+  test('en euros se guarda el precio tal cual y sin «orig» ni «currency»', () => {
+    const update = montar({ routes: [] });
+    fireEvent.press(screen.getByText('+ Añadir trayecto'));
+    escribirOrigenDestino();
+    fireEvent.changeText(precio(), '20');
+    fireEvent.press(screen.getByText('Guardar'));
+    const r = guardada(update);
+    expect(r.cost).toBe(20);
+    expect('orig' in r).toBe(false);
+    expect('currency' in r).toBe(false);
+  });
+
+  test('en USD muestra la vista previa y guarda euros + el importe original', () => {
+    const update = montar({ fx: { USD: 0.9 }, routes: [] });
+    fireEvent.press(screen.getByText('+ Añadir trayecto'));
+    escribirOrigenDestino();
+    fireEvent.changeText(precio(), '100');
+    fireEvent.press(screen.getByText('USD'));
+    expect(screen.getByText('≈ 90.00 € (1 USD = 0.9 €)')).toBeTruthy();
+    fireEvent.press(screen.getByText('Guardar'));
+    const r = guardada(update);
+    expect(r.cost).toBe(90);
+    expect(r.orig).toEqual({ amount: 100, currency: 'USD', rate: 0.9 });
+    expect('currency' in r).toBe(false);
+  });
+
+  test('admite coma decimal en la divisa elegida', () => {
+    const update = montar({ fx: { GBP: 1.2 }, routes: [] });
+    fireEvent.press(screen.getByText('+ Añadir trayecto'));
+    escribirOrigenDestino();
+    fireEvent.changeText(precio(), '12,5');
+    fireEvent.press(screen.getByText('GBP'));
+    fireEvent.press(screen.getByText('Guardar'));
+    expect(guardada(update)).toMatchObject({ cost: 15, orig: { amount: 12.5, currency: 'GBP', rate: 1.2 } });
+  });
+
+  test('un precio vacío se guarda como 0 y uno negativo sigue siendo «Coste no válido»', () => {
+    const update = montar({ routes: [] });
+    fireEvent.press(screen.getByText('+ Añadir trayecto'));
+    escribirOrigenDestino();
+    fireEvent.press(screen.getByText('Guardar'));
+    expect(guardada(update).cost).toBe(0);
+    update.mockClear();
+    fireEvent.press(screen.getByText('+ Añadir trayecto'));
+    escribirOrigenDestino();
+    fireEvent.changeText(precio(), '-5');
+    fireEvent.press(screen.getByText('Guardar'));
+    expect(avisoCon('Coste no válido')).toBe(true);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  test('la tarjeta muestra «90.00 € (100 USD)» y en euros sin paréntesis', () => {
+    montar({ routes: [ruta({ id: 'a', cost: 90, orig: { amount: 100, currency: 'USD', rate: 0.9 } }), ruta({ id: 'b', cost: 20, date: '2026-12-05' })] });
+    expect(screen.getByText('90.00 € (100 USD)')).toBeTruthy();
+    expect(screen.getAllByText('20.00 €').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/20\.00 € \(/)).toBeNull();
+  });
+
+  test('al editar recupera el importe y la divisa originales', () => {
+    montar({ fx: { USD: 0.9 }, routes: [ruta({ cost: 90, orig: { amount: 100, currency: 'USD', rate: 0.9 } })] });
+    fireEvent.press(screen.getByText('Editar'));
+    expect(screen.getByDisplayValue('100')).toBeTruthy();
+    expect(screen.getByText('≈ 90.00 € (1 USD = 0.9 €)')).toBeTruthy();
+  });
+
+  test('al pasar a euros al editar desaparece «orig» y el coste es el importe escrito', () => {
+    const update = montar({ fx: { USD: 0.9 }, routes: [ruta({ cost: 90, orig: { amount: 100, currency: 'USD', rate: 0.9 } })] });
+    fireEvent.press(screen.getByText('Editar'));
+    fireEvent.press(screen.getByText('EUR'));
+    fireEvent.press(screen.getByText('Guardar'));
+    const r = guardada(update);
+    expect(r.cost).toBe(100);
+    expect('orig' in r).toBe(false);
+  });
+
+  test('un trayecto antiguo (sin orig ni divisa) se edita y guarda en euros sin romperse', () => {
+    const update = montar({ routes: [ruta({ cost: 50 })] });
+    fireEvent.press(screen.getByText('Editar'));
+    expect(screen.getByDisplayValue('50')).toBeTruthy();
+    fireEvent.press(screen.getByText('Guardar'));
+    const r = guardada(update);
+    expect(r.cost).toBe(50);
+    expect('orig' in r).toBe(false);
+  });
+
+  // Comportamiento actual (a decidir por Ruta/usuario): al guardar se reconvierte con el cambio de ESE momento
+  test('al editar cualquier campo se reconvierte con el cambio actual (el coste en euros puede variar)', () => {
+    const update = montar({ fx: { USD: 1 }, routes: [ruta({ cost: 90, orig: { amount: 100, currency: 'USD', rate: 0.9 } })] });
+    fireEvent.press(screen.getByText('Editar'));
+    fireEvent.press(screen.getByText('Guardar'));
+    const r = guardada(update);
+    expect(r.cost).toBe(100);
+    expect(r.orig).toEqual({ amount: 100, currency: 'USD', rate: 1 });
+  });
+
+  test('con cambios caducados se descargan al abrir Ruta (BCE simulado) y se guardan en el viaje', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ rates: { USD: 1.25, GBP: 0.8, JPY: 160, CHF: 0.95, CAD: 1.5, AUD: 1.6, MXN: 20, CNY: 7.8 } }) });
+    const update = jest.fn();
+    render(<TripRangeProvider start="2026-12-01" end="2026-12-10"><RoutesScreen trip={{ routes: [], fx: {}, fxAt: Date.now() - 2 * 3600 * 1000 }} update={update} /></TripRangeProvider>);
+    await waitFor(() => expect(update).toHaveBeenCalledWith({ fx: expect.objectContaining({ USD: 0.8 }), fxAt: expect.any(Number) }));
+    expect(fetch.mock.calls[0][0]).toContain('api.frankfurter.app');
+  });
+
+  test('con cambios recientes no se hace ninguna petición al abrir Ruta', () => {
+    montar({ routes: [] });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
