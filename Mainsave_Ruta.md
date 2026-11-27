@@ -38,7 +38,7 @@
 - **Política de Transitous (obligatoria):** User-Agent propio con contacto (`CONTACT` en `src/transitous.js`, hoy vacío), caché (lugares 7 días, rutas 30 min), consultas solo al pulsar botones, tope diario de consultas, atribución a `transitous.org/sources` y OpenStreetMap, uso no comercial y código abierto.
 - Datos antiguos o incompletos no deben romper la pantalla (`arr`, `txt` y `normalizeTrip`).
 - **Editar un trayecto** abre el formulario en una **ventana flotante** (`Modal`, mismo patrón que Hoteles: `formView` + `Modal` + `SafeAreaView`) que se cierra al guardar o cancelar; **añadir** sigue siendo el formulario en línea.
-- **Divisa del precio** (mismo sistema que Gastos, `src/currency.js` + `src/components/CurrencyField.js`): el precio se escribe en la divisa elegida y se guarda **siempre en euros** en `route.cost` (lo que suma Gastos como «Rutas del viaje»); si no es euro se guarda también `route.orig = { amount, currency, rate }` y la tarjeta lo muestra («12,50 € (15 USD)»). Al editar se recupera el importe y la divisa originales. Los cambios son globales del viaje (`trip.fx`, BCE vía Frankfurter, se renuevan solos si pasa 1 h) y `useRates` los actualiza al abrir la pestaña Ruta.
+- **Divisa del precio** (mismo sistema que Gastos, `src/currency.js` + `src/components/CurrencyField.js`): el precio se escribe en la divisa elegida y se guarda **siempre en euros** en `route.cost` (lo que suma Gastos como «Rutas del viaje»); si no es euro se guarda también `route.orig = { amount, currency, rate }` y la tarjeta lo muestra («12,50 € (15 USD)»). Al editar se recupera el importe y la divisa originales. **Al guardar una edición sin tocar el importe ni la divisa se conserva el cambio original** (`cost` y `orig.rate` no se reconvierten con el cambio de hoy; si el trayecto antiguo no guardó `orig.rate`, se deduce de `cost / orig.amount`); solo se recalcula si cambia el importe o la divisa. Los cambios son globales del viaje (`trip.fx`, BCE vía Frankfurter, se renuevan solos si pasa 1 h) y `useRates` los actualiza al abrir la pestaña Ruta.
 
 ## 5. Decisiones tomadas
 - Fechas del viaje por viaje; las fechas de la ruta solo dentro del rango.
@@ -49,6 +49,7 @@
 - Sin probar en móvil real (lo no probable en el entorno de Tests): `DateField`, `PlaceSearch` y el mapa del trazado dentro de la ventana flotante.
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
+- Editar un trayecto con divisa conserva el cambio original si no se toca importe ni divisa.
 - Divisa del precio del trayecto (selector compartido con Gastos; se guarda en euros + importe original).
 - Editar trayecto en ventana flotante (Modal); añadir sigue en línea.
 - `a66fb0f` Líneas y mapa con el trazado en «Consultar ruta».
