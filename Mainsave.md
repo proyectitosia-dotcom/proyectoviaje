@@ -41,7 +41,7 @@
 
 ## 4. Órdenes y metodología del usuario (obligatorias)
 - Responder **siempre en español**; resúmenes claros y honestos (decir qué se probó y qué no, qué no se pudo comprobar).
-- **Sin APIs de pago ni claves de API.** La única API externa permitida es **Transitous** (gratuita, sin clave), solo para Rutas. Respetar su política: User-Agent propio, caché, pocas peticiones, atribución, uso no comercial.
+- **Sin APIs de pago ni claves de API.** La única API externa permitida es **Transitous** (gratuita, sin clave), solo para Rutas. **Excepción autorizada por el usuario:** cambios de divisa (Frankfurter/BCE, respaldo open.er-api.com; gratuitas, sin clave) en `src/currency.js`. Respetar su política: User-Agent propio, caché, pocas peticiones, atribución, uso no comercial.
 - Cuando el usuario pide «explícame el plan y espera confirmación», **no tocar nada** hasta que confirme.
 - Código ordenado y **comentarios en español**.
 - Hacer los cambios **paso a paso, comprobando que compila** tras cada uno, y dar al final resumen + cómo probar cada punto.
@@ -91,6 +91,7 @@ Ruta `session_01XMTbiQQGDTu3GRqsMKFHTi`, Hoteles `session_01XMTbiPSVsrMjPbN3b6hi
 - `eas build` (APK/iOS) sin hacer. Tests de pantallas (Ruta, Calendario, Gastos, Grupo) y recorrido Playwright: pendientes en el subchat Tests.
 
 ## 10. Registro de cambios importantes (añadir arriba la novedad)
+- `53929c0` Divisa compartida (`src/currency.js`, `CurrencyField`) en Gastos, Rutas y Hoteles (se guarda en euros + importe original); Ruta y Hoteles: «Editar» en ventana flotante; excepción de API de divisas aprobada. Pendiente: decidir si al editar con divisa se conserva el cambio original.
 - Archivos `Mainsave_<Nombre>.md` de cada subchat y `CLAUDE.md` (lectura obligatoria al empezar cada sesión).
 - `7f7fc97` Mainsave.md creado.
 - `23a53c0` Tests: Jest + 122 tests de lógica pura aplicados.
