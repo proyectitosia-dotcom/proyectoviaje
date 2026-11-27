@@ -32,6 +32,7 @@
 - Búsqueda en Booking.com por ciudad, fechas, personas y habitaciones. Booking **no tiene API pública abierta**: se abre su búsqueda y el usuario elige el hotel.
 - Al guardar un hotel se muestra: cada día de estancia, precio por noche, **precio por persona** (por noche y por estancia), personas por habitación, nº de habitaciones, hora de check-in, enlace a Booking y a Google Maps (generados automáticamente al elegir el hotel). Campos: `city`, `name`, `address`, `checkIn`, `checkOut`, `checkInTime`, `pricePerNight`, `peoplePerRoom`, `rooms`, `bookingUrl`.
 - Precio, nombre y dirección pueden venir de Booking y se crea un **gasto automático** en la categoría Hoteles (el resumen de Gastos suma los hoteles solo).
+- **El gasto automático de Hoteles es por persona** (orden del usuario): importe = precio/noche × noches ÷ personas por habitación, concepto «Hotel X (por persona)». Los gastos de hoteles ya guardados se corrigen al volver a guardar cada hotel.
 - Fechas de entrada y salida con `DateField` (solo dentro del rango del viaje; la salida usa `min=entrada`); valida que la salida sea posterior a la entrada y evita divisiones por cero.
 
 ## 5. Decisiones tomadas
@@ -39,7 +40,9 @@
 
 ## 6. Pendientes y avisos abiertos
 - La WebView de Booking solo funciona en móvil y no se ha probado en un dispositivo real.
+- Sin comprobar: si el gasto automático de hoteles (sin autor) encaja con «Identidad por persona» de Gastos; hoy Gastos lo suma aparte como «Hoteles del viaje».
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
+- Gasto automático de Hoteles por persona en vez del total de todos.
 - `cff7167` Precio, nombre y dirección desde Booking y gasto automático en la categoría Hoteles.
 - `35199b3` Booking dentro de la app (WebView) y enlaces de Booking y Maps automáticos.

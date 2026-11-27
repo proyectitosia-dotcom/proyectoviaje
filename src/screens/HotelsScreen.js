@@ -52,12 +52,13 @@ export default function HotelsScreen({ trip, update }) {
     const group = trip.group || { members: [], expenses: [] };
     const old = expenses.find((e) => e.hotelId === hid);
     const rest = expenses.filter((e) => e.hotelId !== hid);
-    const amount = h ? Math.round((Number(h.pricePerNight) || 0) * Math.max(1, Number(h.rooms) || 1) * datesBetween(h.checkIn, h.checkOut).length * 100) / 100 : 0;
+    // El gasto es lo que le toca a UNA persona (no el total de todos): precio por noche × noches ÷ personas por habitación
+    const amount = h ? Math.round(((Number(h.pricePerNight) || 0) * datesBetween(h.checkIn, h.checkOut).length / Math.max(1, Number(h.peoplePerRoom) || 1)) * 100) / 100 : 0;
     if (!(amount > 0)) {
       if (!old) return {};
       return { expenses: rest, ...(old.groupId ? { group: { ...group, expenses: (group.expenses || []).filter((g) => g.id !== old.groupId) } } : {}) };
     }
-    const next = { id: old ? old.id : uid(), category: 'hoteles', concept: `Hotel ${h.name}`, amount, date: h.checkIn || '', hotelId: hid, ...(old && old.groupId ? { groupId: old.groupId } : {}) };
+    const next = { id: old ? old.id : uid(), category: 'hoteles', concept: `Hotel ${h.name} (por persona)`, amount, date: h.checkIn || '', hotelId: hid, ...(old && old.groupId ? { groupId: old.groupId } : {}) };
     const patch = { expenses: [...rest, next] };
     if (old && old.groupId) patch.group = { ...group, expenses: (group.expenses || []).map((g) => (g.id === old.groupId ? { ...g, amount, concept: next.concept, date: next.date } : g)) };
     return patch;
@@ -106,7 +107,7 @@ export default function HotelsScreen({ trip, update }) {
           <Field label="Nombre del hotel *" value={form.name} onChangeText={(v) => set('name', v)} />
           <Field label="Dirección (para Google Maps)" value={form.address} onChangeText={(v) => set('address', v)} />
           <Field label="Enlace de Booking del hotel" value={form.bookingUrl} onChangeText={(v) => set('bookingUrl', v)} autoCapitalize="none" placeholder="https://www.booking.com/hotel/..." />
-          {num(form.pricePerNight) > 0 ? <Muted>≈ {money(num(form.pricePerNight) * Math.max(1, num(form.rooms) || 1) / Math.max(1, (num(form.peoplePerRoom) || 1) * Math.max(1, num(form.rooms) || 1)))} por persona y noche · se añade a Gastos › Hoteles al guardar</Muted> : null}
+          {num(form.pricePerNight) > 0 ? <Muted>≈ {money(num(form.pricePerNight) * Math.max(1, num(form.rooms) || 1) / Math.max(1, (num(form.peoplePerRoom) || 1) * Math.max(1, num(form.rooms) || 1)))} por persona y noche · a Gastos › Hoteles se añade lo que paga cada persona por la estancia</Muted> : null}
           <LinkText url={form.mapsUrl || mapsFor(form)}>📍 Enlace de Google Maps (automático)</LinkText>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><Field label="Precio/noche por habitación (€)" value={String(form.pricePerNight)} onChangeText={(v) => set('pricePerNight', v)} keyboardType="decimal-pad" /></View>
