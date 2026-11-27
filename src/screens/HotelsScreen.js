@@ -4,17 +4,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, H, Field, Btn, Row, LinkText, Muted, confirm, notify , Text, DateField, useTheme } from '../components/ui';
 import { uid } from '../store';
 import BookingBrowser from '../components/BookingBrowser';
+import CurrencyField from '../components/CurrencyField';
+import { useRates } from '../currency';
 import { money, num, addDays, datesBetween, formatDate, fmtDMY, bookingSearchUrl, googleMapsPlaceUrl } from '../utils';
 
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && addDays(s, 0) === s;
 const normUrl = (u) => { const t = (u || '').trim(); return !t ? '' : /^https?:\/\//i.test(t) ? t : `https://${t}`; };
 
-const empty = { city: '', name: '', address: '', checkIn: '', checkOut: '', checkInTime: '15:00', pricePerNight: '', peoplePerRoom: '2', rooms: '1', bookingUrl: '', mapsUrl: '' };
+const empty = { city: '', name: '', address: '', checkIn: '', checkOut: '', checkInTime: '15:00', pricePerNight: '', peoplePerRoom: '2', rooms: '1', bookingUrl: '', mapsUrl: '', currency: 'EUR' };
 
 const mapsFor = (h) => (h.lat && h.lng ? `https://www.google.com/maps/search/?api=1&query=${h.lat},${h.lng}` : googleMapsPlaceUrl([h.name, h.address, h.city].filter(Boolean).join(' ')));
 
 export default function HotelsScreen({ trip, update }) {
   const { colors } = useTheme();
+  const rates = useRates(trip, update); // divisa del precio: se guarda siempre en euros
   const [form, setForm] = useState(null);
   const [browserUrl, setBrowserUrl] = useState(null);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -42,7 +45,7 @@ export default function HotelsScreen({ trip, update }) {
       const nn = datesBetween(f.checkIn, f.checkOut).length;
       const rm = Math.max(1, Math.round(num(f.rooms)) || 1);
       const perNight = d.price ? Math.round((d.price / Math.max(1, nn) / rm) * 100) / 100 : null;
-      const n = { ...f, name: d.name || f.name, address: d.address || f.address, city: f.city || d.city || '', bookingUrl: d.url, lat: d.lat, lng: d.lng, ...(perNight ? { pricePerNight: String(perNight) } : {}) };
+      const n = { ...f, name: d.name || f.name, address: d.address || f.address, city: f.city || d.city || '', bookingUrl: d.url, lat: d.lat, lng: d.lng, ...(perNight ? { pricePerNight: String(perNight), currency: 'EUR' } : {}) };
       return { ...n, mapsUrl: mapsFor(n) };
     });
     setBrowserUrl(null);
@@ -74,13 +77,17 @@ export default function HotelsScreen({ trip, update }) {
     if (co && !isDate(co)) return notify('Fecha de salida no válida', 'Elige la fecha en el calendario.');
     if ((ci && !co) || (!ci && co)) return notify('Faltan fechas', 'Indica tanto la entrada como la salida.');
     if (ci && co && co <= ci) return notify('Fechas incorrectas', 'La fecha de salida debe ser posterior a la de entrada.');
-    const price = num(form.pricePerNight);
-    if (price < 0) return notify('Precio no válido', 'El precio no puede ser negativo.');
+    if (num(form.pricePerNight) < 0) return notify('Precio no válido', 'El precio no puede ser negativo.');
+    const conv = rates.convert(form.pricePerNight, form.currency || 'EUR'); // { eur, orig? }
+    const price = conv.eur;
     const h = {
       ...form, name, city, checkIn: ci, checkOut: co, bookingUrl: normUrl(form.bookingUrl), pricePerNight: price,
       mapsUrl: form.mapsUrl || mapsFor({ name, address: form.address, city, lat: form.lat, lng: form.lng }),
       peoplePerRoom: Math.max(1, Math.round(num(form.peoplePerRoom)) || 1), rooms: Math.max(1, Math.round(num(form.rooms)) || 1),
     };
+    delete h.currency; // la divisa solo vive en el formulario; el hotel guarda euros (+ el precio original si no era en euros)
+    delete h.priceOrig;
+    if (conv.orig) h.priceOrig = conv.orig;
     const hid = form.id || uid();
     const list = form.id ? hotels.map((x) => (x.id === form.id ? h : x)) : [...hotels, { ...h, id: hid }];
     list.sort((a, b) => (a.checkIn || '').localeCompare(b.checkIn || ''));
@@ -105,12 +112,13 @@ export default function HotelsScreen({ trip, update }) {
           <Field label="Nombre del hotel *" value={form.name} onChangeText={(v) => set('name', v)} />
           <Field label="Dirección (para Google Maps)" value={form.address} onChangeText={(v) => set('address', v)} />
           <Field label="Enlace de Booking del hotel" value={form.bookingUrl} onChangeText={(v) => set('bookingUrl', v)} autoCapitalize="none" placeholder="https://www.booking.com/hotel/..." />
-          {num(form.pricePerNight) > 0 ? <Muted>≈ {money(num(form.pricePerNight) * Math.max(1, num(form.rooms) || 1) / Math.max(1, (num(form.peoplePerRoom) || 1) * Math.max(1, num(form.rooms) || 1)))} por persona y noche · a Gastos › Hoteles se añade lo que paga cada persona por la estancia</Muted> : null}
+          {num(form.pricePerNight) > 0 ? <Muted>≈ {money(rates.convert(form.pricePerNight, form.currency || 'EUR').eur / Math.max(1, num(form.peoplePerRoom) || 1))} por persona y noche · a Gastos › Hoteles se añade lo que paga cada persona por la estancia</Muted> : null}
           <LinkText url={form.mapsUrl || mapsFor(form)}>📍 Enlace de Google Maps (automático)</LinkText>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}><Field label="Precio/noche por habitación (€)" value={String(form.pricePerNight)} onChangeText={(v) => set('pricePerNight', v)} keyboardType="decimal-pad" /></View>
+            <View style={{ flex: 1 }}><Field label={`Precio/noche por habitación (${form.currency || 'EUR'})`} value={String(form.pricePerNight)} onChangeText={(v) => set('pricePerNight', v)} keyboardType="decimal-pad" /></View>
             <View style={{ flex: 1 }}><Field label="Hora check-in" value={form.checkInTime} onChangeText={(v) => set('checkInTime', v)} /></View>
           </View>
+          <CurrencyField currency={form.currency || 'EUR'} amount={form.pricePerNight} rates={rates} onChange={(c) => set('currency', c)} label="Divisa del precio por noche" />
           <Btn title="Guardar hotel" onPress={save} />
           <Btn title="Cancelar" kind="outline" onPress={() => setForm(null)} />
           <BookingBrowser visible={!!browserUrl} url={browserUrl} onClose={() => setBrowserUrl(null)} onPick={pickHotel} />
@@ -150,7 +158,7 @@ export default function HotelsScreen({ trip, update }) {
             {h.checkIn && h.checkOut ? <Row label="Fechas" value={`${fmtDMY(h.checkIn)} → ${fmtDMY(h.checkOut)}`} /> : null}
             <Row label="Personas por habitación" value={h.peoplePerRoom} />
             <Row label="Nº habitaciones" value={h.rooms} />
-            <Row label="Precio por noche (habitación)" value={money(h.pricePerNight)} />
+            <Row label="Precio por noche (habitación)" value={`${money(h.pricePerNight)}${h.priceOrig ? ` (${h.priceOrig.amount} ${h.priceOrig.currency})` : ''}`} />
             <Row label="Precio por persona / noche" value={money(perNightTotal / people)} />
             <Row label="Precio por persona (estancia)" value={money(total / people)} />
             <Row label={`Total (${nights.length} ${nights.length === 1 ? 'noche' : 'noches'})`} value={money(total)} />
@@ -160,7 +168,7 @@ export default function HotelsScreen({ trip, update }) {
               : <LinkText url={bookingSearchUrl({ city: `${h.name} ${h.city}`, checkIn: nights.length ? h.checkIn : undefined, checkOut: nights.length ? h.checkOut : undefined })}>Buscar en Booking.com</LinkText>}
             <LinkText url={h.mapsUrl || mapsFor(h)}>Ver en Google Maps</LinkText>
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Btn small title="Editar" kind="outline" style={{ flex: 1 }} onPress={() => setForm({ ...h, pricePerNight: String(h.pricePerNight), peoplePerRoom: String(h.peoplePerRoom), rooms: String(h.rooms) })} />
+              <Btn small title="Editar" kind="outline" style={{ flex: 1 }} onPress={() => setForm({ ...h, currency: h.priceOrig ? h.priceOrig.currency : 'EUR', pricePerNight: String(h.priceOrig ? h.priceOrig.amount : h.pricePerNight), peoplePerRoom: String(h.peoplePerRoom), rooms: String(h.rooms) })} />
               <Btn small title="Eliminar" kind="danger" style={{ flex: 1 }} onPress={() => confirm('¿Eliminar hotel? También se quitará su gasto.', () => update({ hotels: hotels.filter((x) => x.id !== h.id), ...hotelExpensePatch(h.id, null) }))} />
             </View>
           </Card>
