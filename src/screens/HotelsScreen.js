@@ -69,6 +69,15 @@ export default function HotelsScreen({ trip, update }) {
     return patch;
   };
 
+  // Precio por noche en euros del formulario. Si se edita un hotel y NO se toca ni el importe ni la divisa, se conserva el cambio
+  // original (priceOrig.rate) en vez de reconvertir con el cambio de hoy; solo se recalcula si el usuario cambia importe o divisa.
+  const priceFromForm = (f) => {
+    const old = f.id ? hotels.find((x) => x.id === f.id) : null;
+    const po = old && old.priceOrig;
+    if (po && (f.currency || 'EUR') === po.currency && num(f.pricePerNight) === num(po.amount)) return { eur: num(old.pricePerNight), orig: po };
+    return rates.convert(f.pricePerNight, f.currency || 'EUR');
+  };
+
   const save = () => {
     const name = (form.name || '').trim(), city = (form.city || '').trim();
     if (!name || !city) return notify('Faltan datos', 'El nombre del hotel y la ciudad son obligatorios.');
@@ -78,7 +87,7 @@ export default function HotelsScreen({ trip, update }) {
     if ((ci && !co) || (!ci && co)) return notify('Faltan fechas', 'Indica tanto la entrada como la salida.');
     if (ci && co && co <= ci) return notify('Fechas incorrectas', 'La fecha de salida debe ser posterior a la de entrada.');
     if (num(form.pricePerNight) < 0) return notify('Precio no válido', 'El precio no puede ser negativo.');
-    const conv = rates.convert(form.pricePerNight, form.currency || 'EUR'); // { eur, orig? }
+    const conv = priceFromForm(form); // { eur, orig? }
     const price = conv.eur;
     const h = {
       ...form, name, city, checkIn: ci, checkOut: co, bookingUrl: normUrl(form.bookingUrl), pricePerNight: price,
@@ -112,7 +121,7 @@ export default function HotelsScreen({ trip, update }) {
           <Field label="Nombre del hotel *" value={form.name} onChangeText={(v) => set('name', v)} />
           <Field label="Dirección (para Google Maps)" value={form.address} onChangeText={(v) => set('address', v)} />
           <Field label="Enlace de Booking del hotel" value={form.bookingUrl} onChangeText={(v) => set('bookingUrl', v)} autoCapitalize="none" placeholder="https://www.booking.com/hotel/..." />
-          {num(form.pricePerNight) > 0 ? <Muted>≈ {money(rates.convert(form.pricePerNight, form.currency || 'EUR').eur / Math.max(1, num(form.peoplePerRoom) || 1))} por persona y noche · a Gastos › Hoteles se añade lo que paga cada persona por la estancia</Muted> : null}
+          {num(form.pricePerNight) > 0 ? <Muted>≈ {money(priceFromForm(form).eur / Math.max(1, num(form.peoplePerRoom) || 1))} por persona y noche · a Gastos › Hoteles se añade lo que paga cada persona por la estancia</Muted> : null}
           <LinkText url={form.mapsUrl || mapsFor(form)}>📍 Enlace de Google Maps (automático)</LinkText>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ flex: 1 }}><Field label={`Precio/noche por habitación (${form.currency || 'EUR'})`} value={String(form.pricePerNight)} onChangeText={(v) => set('pricePerNight', v)} keyboardType="decimal-pad" /></View>

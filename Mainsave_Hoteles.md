@@ -34,7 +34,7 @@
 - Precio, nombre y dirección pueden venir de Booking y se crea un **gasto automático** en la categoría Hoteles (el resumen de Gastos suma los hoteles solo).
 - **El gasto automático de Hoteles es por persona** (orden del usuario): importe = precio/noche × noches ÷ personas por habitación, concepto «Hotel X (por persona)». Los gastos de hoteles ya guardados se corrigen al volver a guardar cada hotel.
 - **Editar un hotel** abre el formulario en una **ventana flotante** (Modal) que se cierra al guardar o cancelar; **añadir** sigue siendo el formulario en línea. La tarjeta del hotel muestra las fechas como `dd-mm-aaaa` (`fmtDMY`).
-- **Divisa del precio por noche** (orden del usuario): `CurrencyField` + `useRates` de `src/currency.js` (mismo sistema que Gastos, cambios globales del viaje en `trip.fx`). El hotel **guarda siempre euros** en `pricePerNight` y, si se escribió en otra divisa, el precio original en `priceOrig {amount, currency, rate}` (se muestra junto al precio en la tarjeta y se recupera al editar). El gasto automático por persona sigue en euros. El precio leído de Booking se toma como euros.
+- **Divisa del precio por noche** (orden del usuario): `CurrencyField` + `useRates` de `src/currency.js` (mismo sistema que Gastos, cambios globales del viaje en `trip.fx`). El hotel **guarda siempre euros** en `pricePerNight` y, si se escribió en otra divisa, el precio original en `priceOrig {amount, currency, rate}` (se muestra junto al precio en la tarjeta y se recupera al editar). **Al editar sin tocar importe ni divisa se conserva el cambio original** (`priceOrig.rate`); solo se recalcula si el usuario cambia el importe o la divisa (`priceFromForm`). El gasto automático por persona sigue en euros. El precio leído de Booking se toma como euros.
 - Fechas de entrada y salida con `DateField` (solo dentro del rango del viaje; la salida usa `min=entrada`); valida que la salida sea posterior a la entrada y evita divisiones por cero.
 
 ## 5. Decisiones tomadas
@@ -46,6 +46,7 @@
 - Sin comprobar: si el gasto automático de hoteles (sin autor) encaja con «Identidad por persona» de Gastos; hoy Gastos lo suma aparte como «Hoteles del viaje».
 
 ## 7. Registro de cambios importantes (añadir arriba la novedad)
+- Al editar un hotel con divisa se conserva el cambio original si no se toca importe/divisa.
 - Selector de divisa en el precio por noche del hotel (se guarda en euros + `priceOrig`).
 - Editar hotel en ventana flotante y fechas dd-mm-aaaa en la tarjeta del hotel.
 - Gasto automático de Hoteles por persona en vez del total de todos.
