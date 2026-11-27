@@ -10,7 +10,7 @@ import PlaceSearch from '../components/PlaceSearch';
 import PlanView from '../components/PlanView';
 import RouteMap from '../components/RouteMap';
 import CurrencyField from '../components/CurrencyField';
-import { useRates } from '../currency';
+import { useRates, roundMoney } from '../currency';
 import { planRoute, summarize, errorMessage, SOURCES_URL, fmtTime as _fmtTime, fmtDur as _fmtDur } from '../transitous';
 
 const TRANSPORTS = ['Avión', 'Tren', 'Autobús', 'Metro', 'Tranvía', 'Coche', 'Taxi', 'Barco', 'A pie', 'Bici'];
@@ -108,8 +108,23 @@ export default function RoutesScreen({ trip, update }) {
     if (cost < 0) return notify('Coste no válido', 'El coste no puede ser negativo.');
     const mapUrl = txt(form.mapUrl);
     if (mapUrl && !isMapsLink(mapUrl)) return notify('Enlace no válido', 'Pega un enlace de Google Maps (https://www.google.com/maps/... o https://maps.app.goo.gl/...).');
-    // El coste se escribe en la divisa elegida; se guarda SIEMPRE en euros (cost) y, si no es euro, el importe original (orig)
-    const { eur, orig } = rates.convert(form.cost, form.currency);
+    // El coste se escribe en la divisa elegida; se guarda SIEMPRE en euros (cost) y, si no es euro, el importe original (orig, con el cambio usado)
+    const conv = rates.convert(form.cost, form.currency);
+    let eur = conv.eur;
+    let orig = conv.orig;
+    // Al editar sin tocar el importe ni la divisa se CONSERVA el cambio original (no se reconvierte con el cambio de hoy);
+    // solo se recalcula si el usuario cambia el importe o la divisa
+    const prev = form.id ? allRoutes.find((x) => x.id === form.id) : null;
+    if (prev) {
+      const po = prev.orig && prev.orig.currency ? prev.orig : null;
+      const prevCur = po ? po.currency : 'EUR';
+      const prevAmount = po ? num(po.amount) : num(prev.cost);
+      if (form.currency === prevCur && roundMoney(num(form.cost)) === roundMoney(prevAmount)) {
+        eur = num(prev.cost);
+        // Si el trayecto antiguo no guardó el cambio, se deduce de cost/orig.amount (o, en último caso, del cambio actual)
+        orig = po ? { ...po, rate: num(po.rate) > 0 ? po.rate : (num(po.amount) > 0 ? Number((num(prev.cost) / num(po.amount)).toPrecision(6)) : rates.rateOf(po.currency)) } : undefined;
+      }
+    }
     const { originText, destText, currency, ...rest } = form;
     const r = { ...rest, section: sectionOf(form), origin, destination, date, time, mapUrl, stops: txt(form.stops).split(',').map((x) => x.trim()).filter(Boolean), cost: eur, duration: txt(form.duration), lines: txt(form.lines) };
     if (orig) r.orig = orig; else delete r.orig; // Firestore no admite undefined
