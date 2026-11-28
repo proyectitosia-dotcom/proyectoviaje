@@ -57,7 +57,7 @@ Ruta `session_01XMTbiQQGDTu3GRqsMKFHTi`, Hoteles `session_01XMTbiPSVsrMjPbN3b6hi
 
 **Flujo actual (orden del usuario):**
 1. Cada subchat sube su cambio a una **rama candidata** `claude/candidato-<apartado>` (no a la principal) y avisa a **Tests**; ya **no ejecutan sus propias comprobaciones**.
-2. **Tests** fusiona, prueba (jest sin internet, compilación web/android, recorrido con Playwright si procede) y solo comunica al usuario lo importante (qué probó, nº de tests, fallos, qué no pudo probar).
+2. **Tests** fusiona y prueba **solo lo relacionado con el cambio** (tests de los archivos/pantallas tocados y su recorrido Playwright); toda la app solo si el cambio es compartido (p. ej. `src/currency.js`, `store`, `App.js`) o lo pide el usuario. Comunica al usuario lo importante (qué probó, nº de tests, fallos, qué no pudo probar).
 3. Si todo va bien, Tests **aplica** el cambio a `claude/lucid-mayer-vak935` y avisa al chat principal con «**TESTS OK · APLICADO**»; entonces el chat principal **genera el ZIP + `.bat` y los envía automáticamente** al usuario.
 4. Si falla: «TESTS FALLAN», no se aplica nada y el subchat de origen corrige.
 - Los cambios hechos **en el chat principal** se comprueban en el propio chat (salvo que el usuario pida otra cosa).
