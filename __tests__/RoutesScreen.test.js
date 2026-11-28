@@ -525,3 +525,50 @@ describe('RoutesScreen: divisa del precio', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe('RoutesScreen: traducción al español en la tarjeta', () => {
+  const MUC = { name: 'München Hbf', lat: 48.14, lon: 11.56, tz: 'Europe/Berlin' };
+  const VIE = { name: 'Wien Westbahnhof', lat: 48.2, lon: 16.33, tz: 'Europe/Vienna' };
+  const base = { origin: 'München Hbf', destination: 'Wien Westbahnhof', name: 'Ida' };
+
+  test('con lugares de Transitous las filas Origen y Destino llevan la traducción', () => {
+    montar({ routes: [ruta({ ...base, from: MUC, to: VIE })] });
+    expect(screen.getByText('München Hbf (Múnich estación central)')).toBeTruthy();
+    expect(screen.getByText('Wien Westbahnhof (Viena estación oeste)')).toBeTruthy();
+  });
+
+  test('si el origen o el destino se escribieron a mano NO se traducen', () => {
+    montar({ routes: [ruta({ ...base })] });
+    expect(screen.getByText('München Hbf')).toBeTruthy();
+    expect(screen.getByText('Wien Westbahnhof')).toBeTruthy();
+    expect(screen.queryByText(/\(Múnich/)).toBeNull();
+  });
+
+  test('con solo el origen de Transitous se traduce el origen y no el destino', () => {
+    montar({ routes: [ruta({ ...base, from: MUC })] });
+    expect(screen.getByText('München Hbf (Múnich estación central)')).toBeTruthy();
+    expect(screen.getByText('Wien Westbahnhof')).toBeTruthy();
+  });
+
+  test('lo que escribe el usuario (nombre, paradas) no se traduce', () => {
+    montar({ routes: [ruta({ ...base, from: MUC, to: VIE, name: 'Hauptbahnhof tour', stops: ['Hbf Salzburg'] })] });
+    expect(screen.getByText('1. Hauptbahnhof tour')).toBeTruthy();
+    expect(screen.getByText('Hbf Salzburg')).toBeTruthy();
+  });
+
+  test('un lugar ya en español no lleva paréntesis', () => {
+    montar({ routes: [ruta({ origin: 'Madrid Atocha', destination: 'Sevilla Santa Justa', name: 'AVE', from: MAD, to: BCN })] });
+    expect(screen.getByText('Madrid Atocha')).toBeTruthy();
+    expect(screen.getByText('Sevilla Santa Justa')).toBeTruthy();
+  });
+
+  test('al editar y guardar, el origen y el destino guardados siguen siendo los ORIGINALES (la traducción no se cuela)', () => {
+    const update = montar({ routes: [ruta({ ...base, from: MUC, to: VIE })] });
+    fireEvent.press(screen.getByText('Editar'));
+    expect(screen.getByDisplayValue('München Hbf')).toBeTruthy();
+    fireEvent.press(screen.getByText('Guardar'));
+    const r = update.mock.calls[0][0].routes[0];
+    expect(r.origin).toBe('München Hbf');
+    expect(r.destination).toBe('Wien Westbahnhof');
+  });
+});
