@@ -5,6 +5,7 @@ import React, { useState } from 'react';
 import { TouchableOpacity, View } from 'react-native';
 import { Btn, Field, Label, Muted, Text, useTheme } from './ui';
 import { geocode, errorMessage } from '../transitous';
+import { withEs } from '../translate';
 
 export default function PlaceSearch({ label, text, onText, place, onPick }) {
   const { colors } = useTheme();
@@ -31,7 +32,7 @@ export default function PlaceSearch({ label, text, onText, place, onPick }) {
     <View style={{ marginBottom: 4 }}>
       <Field label={label} value={text} onChangeText={(v) => { onText(v); if (place) onPick(null); }} placeholder="Ej. Madrid Atocha" returnKeyType="search" onSubmitEditing={search} />
       {place ? (
-        <Muted>✔ {place.name}{place.place ? ` · ${place.place}` : ''}</Muted>
+        <Muted>✔ {withEs(place.name)}{place.place ? ` · ${withEs(place.place)}` : ''}</Muted>
       ) : (
         <Btn small kind="outline" title={loading ? 'Buscando…' : '🔎 Buscar lugar'} onPress={search} />
       )}
@@ -42,8 +43,8 @@ export default function PlaceSearch({ label, text, onText, place, onPick }) {
           <Label> Elige uno:</Label>
           {results.map((p) => (
             <TouchableOpacity key={p.id} onPress={() => choose(p)} style={{ paddingVertical: 8, paddingHorizontal: 10, borderTopWidth: 1, borderColor: colors.border }}>
-              <Text style={{ fontWeight: '600' }}>{p.name}</Text>
-              {p.place ? <Muted>{p.place}</Muted> : null}
+              <Text style={{ fontWeight: '600' }}>{withEs(p.name)}</Text>
+              {p.place ? <Muted>{withEs(p.place)}</Muted> : null}
             </TouchableOpacity>
           ))}
         </View>

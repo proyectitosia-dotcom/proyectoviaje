@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View } from 'react-native';
 import MapView from './MapView';
 import { Muted } from './ui';
+import { withEs } from '../translate';
 
 // Convierte un itinerario guardado en lo que entiende el mapa
 function buildPayload(plan, from, to) {
@@ -16,11 +17,11 @@ function buildPayload(plan, from, to) {
     if (Array.isArray(l.geo) && l.geo.length >= 4) for (let k = 0; k + 1 < l.geo.length; k += 2) pts.push([l.geo[k], l.geo[k + 1]]);
     else if (Number.isFinite(l.fromLat) && Number.isFinite(l.toLat)) pts = [[l.fromLat, l.fromLon], [l.toLat, l.toLon]]; // sin trazado: línea recta
     if (pts.length > 1) legs.push({ mode: l.mode, pts });
-    if (i > 0 && Number.isFinite(l.fromLat)) points.push({ lat: l.fromLat, lng: l.fromLon, name: l.from, kind: 'stop' });
+    if (i > 0 && Number.isFinite(l.fromLat)) points.push({ lat: l.fromLat, lng: l.fromLon, name: withEs(l.from), kind: 'stop' });
   });
   const first = list[0], last = list[list.length - 1];
-  const a = first && Number.isFinite(first.fromLat) ? { lat: first.fromLat, lng: first.fromLon, name: first.from } : from ? { lat: from.lat, lng: from.lon, name: from.name } : null;
-  const b = last && Number.isFinite(last.toLat) ? { lat: last.toLat, lng: last.toLon, name: last.to } : to ? { lat: to.lat, lng: to.lon, name: to.name } : null;
+  const a = first && Number.isFinite(first.fromLat) ? { lat: first.fromLat, lng: first.fromLon, name: withEs(first.from) } : from ? { lat: from.lat, lng: from.lon, name: withEs(from.name) } : null;
+  const b = last && Number.isFinite(last.toLat) ? { lat: last.toLat, lng: last.toLon, name: withEs(last.to) } : to ? { lat: to.lat, lng: to.lon, name: withEs(to.name) } : null;
   if (a) points.push({ ...a, kind: 'start' });
   if (b) points.push({ ...b, kind: 'end' });
   // Ruta antigua sin tramos con coordenadas: línea recta entre origen y destino

@@ -10,6 +10,7 @@ import PlaceSearch from '../components/PlaceSearch';
 import PlanView from '../components/PlanView';
 import RouteMap from '../components/RouteMap';
 import CurrencyField from '../components/CurrencyField';
+import { withEs } from '../translate';
 import { useRates, roundMoney } from '../currency';
 import { planRoute, summarize, errorMessage, SOURCES_URL, fmtTime as _fmtTime, fmtDur as _fmtDur } from '../transitous';
 
@@ -260,9 +261,9 @@ export default function RoutesScreen({ trip, update }) {
         <Card key={r.id || i}>
           <Text style={{ fontWeight: '700', fontSize: 16 }}>{i + 1}. {r.name || `${txt(r.origin)} → ${txt(r.destination)}`}</Text>
           <Muted>{r.date ? fmtDMY(r.date) : 'Sin fecha'}{r.time ? ` · ${r.time}` : ''}</Muted>
-          <Row label="Origen" value={txt(r.origin)} />
+          <Row label="Origen" value={r.from ? withEs(txt(r.origin)) : txt(r.origin)} />
           {arr(r.stops).length > 0 && <Row label="Paradas" value={arr(r.stops).join(' → ')} />}
-          <Row label="Destino" value={txt(r.destination)} />
+          <Row label="Destino" value={r.to ? withEs(txt(r.destination)) : txt(r.destination)} />
           {r.plan && Array.isArray(r.plan.legs) ? (
             <View>
               <PlanView plan={r.plan} tz={r.plan.tz} />

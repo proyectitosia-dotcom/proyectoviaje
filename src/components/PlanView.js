@@ -4,6 +4,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { Muted, Text, useTheme } from './ui';
 import { fmtDur, fmtTime, modeIcon, modeLabel } from '../transitous';
+import { withEs } from '../translate';
 
 export default function PlanView({ plan, tz, compact }) {
   const { colors } = useTheme();
@@ -25,10 +26,10 @@ export default function PlanView({ plan, tz, compact }) {
             <Text style={{ fontSize: 18 }}>{modeIcon(l.mode)}</Text>
             <View style={{ flex: 1 }}>
               <Text style={{ fontWeight: '600' }}>
-                {walk ? `A pie ${fmtDur(l.durationMin)}${l.distance ? ` (${l.distance} m)` : ''}` : `${modeLabel(l.mode)}${l.line ? ` ${l.line}` : ''}${l.headsign && !compact ? ` → ${l.headsign}` : ''}`}
+                {walk ? `A pie ${fmtDur(l.durationMin)}${l.distance ? ` (${l.distance} m)` : ''}` : `${modeLabel(l.mode)}${l.line ? ` ${l.line}` : ''}${l.headsign && !compact ? ` → ${withEs(l.headsign)}` : ''}`}
               </Text>
-              <Muted>{fmtTime(l.start, zone)} {l.from}  →  {fmtTime(l.end, zone)} {l.to}</Muted>
-              {!walk && l.agency && !compact ? <Muted>{l.agency} · {fmtDur(l.durationMin)}</Muted> : null}
+              <Muted>{fmtTime(l.start, zone)} {withEs(l.from)}  →  {fmtTime(l.end, zone)} {withEs(l.to)}</Muted>
+              {!walk && l.agency && !compact ? <Muted>{withEs(l.agency)} · {fmtDur(l.durationMin)}</Muted> : null}
             </View>
           </View>
         );
