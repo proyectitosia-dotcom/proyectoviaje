@@ -78,6 +78,16 @@ const path = require('path'); const os = require('os');
   check('al editar vuelve el importe original (100) y la vista previa en USD', (await p.locator('input[value="100"]').count()) === 1 && (await texto()).includes('≈ 80.00 € (1 USD = 0.8 €)'));
   await p.getByText('Cancelar', { exact: true }).click(); await p.waitForTimeout(300);
 
+  // El dólar baja a 0.5 en «Cambio de divisa»; al reeditar el trayecto sin tocar importe ni divisa se conserva el cambio original (0.8)
+  await p.getByText('Gastos', { exact: true }).click(); await p.waitForTimeout(600);
+  await p.getByText('Abrir ▼').click(); await p.waitForTimeout(300);
+  const usd = await p.locator('input[value="0.8"]').elementHandle(); await usd.fill('0.5'); await usd.press('Enter'); await p.waitForTimeout(500);
+  check('el cambio del dólar queda en 0.5', (await p.locator('input[value="0.5"]').count()) === 1);
+  await p.getByText('Ruta', { exact: true }).click(); await p.waitForTimeout(500);
+  await p.getByText('Editar', { exact: true }).click(); await p.waitForTimeout(400);
+  await p.getByText('Guardar', { exact: true }).click(); await p.waitForTimeout(700);
+  check('reeditar sin tocar importe ni divisa conserva «80.00 € (100 USD)»', (await texto()).includes('80.00 € (100 USD)'));
+
   // Gastos
   await p.getByText('Gastos', { exact: true }).click(); await p.waitForTimeout(800);
   t = await texto();

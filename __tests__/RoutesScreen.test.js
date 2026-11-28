@@ -410,14 +410,106 @@ describe('RoutesScreen: divisa del precio', () => {
     expect('orig' in r).toBe(false);
   });
 
-  // Comportamiento actual (a decidir por Ruta/usuario): al guardar se reconvierte con el cambio de ESE momento
-  test('al editar cualquier campo se reconvierte con el cambio actual (el coste en euros puede variar)', () => {
-    const update = montar({ fx: { USD: 1 }, routes: [ruta({ cost: 90, orig: { amount: 100, currency: 'USD', rate: 0.9 } })] });
-    fireEvent.press(screen.getByText('Editar'));
-    fireEvent.press(screen.getByText('Guardar'));
-    const r = guardada(update);
-    expect(r.cost).toBe(100);
-    expect(r.orig).toEqual({ amount: 100, currency: 'USD', rate: 1 });
+  // Al editar se conserva el cambio original; solo se recalcula si se cambia el importe o la divisa
+  describe('al editar se conserva el cambio original', () => {
+    // Trayecto guardado en USD con cambio 0.9 (100 USD = 90 €); hoy el dólar vale 1.0
+    const enUsd = ruta({ cost: 90, orig: { amount: 100, currency: 'USD', rate: 0.9 } });
+    const hoy = { fx: { USD: 1, GBP: 1.2 } };
+    const editar = () => fireEvent.press(screen.getByText('Editar'));
+    const guardar = () => fireEvent.press(screen.getByText('Guardar'));
+
+    test('sin tocar importe ni divisa: coste 90 y rate 0.9 (no se reconvierte)', () => {
+      const update = montar({ ...hoy, routes: [enUsd] });
+      editar(); guardar();
+      const r = guardada(update);
+      expect(r.cost).toBe(90);
+      expect(r.orig).toEqual({ amount: 100, currency: 'USD', rate: 0.9 });
+    });
+
+    test('cambiar otro campo (hora, paradas) sigue conservando el cambio', () => {
+      const update = montar({ ...hoy, routes: [enUsd] });
+      editar();
+      fireEvent.changeText(screen.getByPlaceholderText('Sin hora: todo el día'), '10:15');
+      fireEvent.changeText(screen.getByPlaceholderText('Zaragoza, Barcelona'), 'Lleida');
+      guardar();
+      const r = guardada(update);
+      expect(r).toMatchObject({ time: '10:15', stops: ['Lleida'], cost: 90 });
+      expect(r.orig.rate).toBe(0.9);
+    });
+
+    test('cambiar el importe recalcula con el cambio de hoy (120 USD × 1.0 = 120 €)', () => {
+      const update = montar({ ...hoy, routes: [enUsd] });
+      editar();
+      fireEvent.changeText(precio(), '120');
+      guardar();
+      const r = guardada(update);
+      expect(r.cost).toBe(120);
+      expect(r.orig).toEqual({ amount: 120, currency: 'USD', rate: 1 });
+    });
+
+    test('cambiar la divisa recalcula: a EUR desaparece orig; a GBP usa el cambio de hoy', () => {
+      let update = montar({ ...hoy, routes: [enUsd] });
+      editar();
+      fireEvent.press(screen.getByText('EUR'));
+      guardar();
+      expect(guardada(update).cost).toBe(100);
+      expect('orig' in guardada(update)).toBe(false);
+    });
+
+    test('a GBP con el mismo importe recalcula con el cambio de hoy', () => {
+      const update = montar({ ...hoy, routes: [enUsd] });
+      editar();
+      fireEvent.press(screen.getByText('GBP'));
+      guardar();
+      expect(guardada(update)).toMatchObject({ cost: 120, orig: { amount: 100, currency: 'GBP', rate: 1.2 } });
+    });
+
+    test('cambiar el importe y volver al original conserva el cambio original', () => {
+      const update = montar({ ...hoy, routes: [enUsd] });
+      editar();
+      fireEvent.changeText(precio(), '120');
+      fireEvent.changeText(precio(), '100');
+      guardar();
+      expect(guardada(update)).toMatchObject({ cost: 90, orig: { rate: 0.9 } });
+    });
+
+    test('un trayecto en euros se conserva idéntico y sin orig', () => {
+      const update = montar({ ...hoy, routes: [ruta({ cost: 20 })] });
+      editar();
+      fireEvent.changeText(screen.getByPlaceholderText('Sin hora: todo el día'), '11:00');
+      guardar();
+      const r = guardada(update);
+      expect(r.cost).toBe(20);
+      expect('orig' in r).toBe(false);
+    });
+
+    test('un trayecto antiguo con orig sin rate: se deduce 90/100 = 0.9', () => {
+      const update = montar({ ...hoy, routes: [ruta({ cost: 90, orig: { amount: 100, currency: 'USD' } })] });
+      editar(); guardar();
+      const r = guardada(update);
+      expect(r.cost).toBe(90);
+      expect(r.orig).toEqual({ amount: 100, currency: 'USD', rate: 0.9 });
+    });
+
+    test('con coma decimal: reescribir el mismo importe se considera sin tocar', () => {
+      const update = montar({ ...hoy, routes: [ruta({ cost: 11.25, orig: { amount: 12.5, currency: 'USD', rate: 0.9 } })] });
+      editar();
+      fireEvent.changeText(precio(), '12,5');
+      guardar();
+      const r = guardada(update);
+      expect(r.cost).toBe(11.25);
+      expect(r.orig.rate).toBe(0.9);
+    });
+
+    test('un trayecto nuevo siempre se convierte con el cambio de hoy', () => {
+      const update = montar({ ...hoy, routes: [] });
+      fireEvent.press(screen.getByText('+ Añadir trayecto'));
+      escribirOrigenDestino();
+      fireEvent.changeText(precio(), '100');
+      fireEvent.press(screen.getByText('GBP'));
+      fireEvent.press(screen.getByText('Guardar'));
+      expect(guardada(update)).toMatchObject({ cost: 120, orig: { amount: 100, currency: 'GBP', rate: 1.2 } });
+    });
   });
 
   test('con cambios caducados se descargan al abrir Ruta (BCE simulado) y se guardan en el viaje', async () => {
